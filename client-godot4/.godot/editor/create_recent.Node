@@ -1,0 +1,9 @@
+DirectionalLight3D
+MeshInstance3D
+SpotLight3D
+StaticBody3D
+Node3D
+Net
+Player
+Node
+Camera3D
