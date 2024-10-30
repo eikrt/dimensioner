@@ -1,20 +1,21 @@
 use async_std::task;
 use crossbeam::channel::unbounded;
+use dimensioner_client_sdl2::net::{fetch_chunk, send_client_data, ClientData};
+use dimensioner_client_sdl2::plot::plot;
+use dimensioner_client_sdl2::renderer::render_server;
+use dimensioner_client_sdl2::util::{ClientMsg, MainMsg, RenderMsg};
+use dimensioner_client_sdl2::worldgen::{worldgen, Camera, Entity, News, CHUNK_SIZE, WORLD_SIZE};
 use rand::Rng;
 use rayon::prelude::*;
 use std::io;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use dimensioner_client_sdl2::net::{fetch_chunk, send_client_data, ClientData};
-use dimensioner_client_sdl2::plot::plot;
-use dimensioner_client_sdl2::renderer::{render_server};
-use dimensioner_client_sdl2::util::{ClientMsg, MainMsg, RenderMsg};
-use dimensioner_client_sdl2::worldgen::{worldgen, Camera, Entity, News, CHUNK_SIZE, WORLD_SIZE};
 
 use lazy_static::lazy_static;
 lazy_static! {
     pub static ref PARTITION_SIZE: usize = (*WORLD_SIZE as usize * *WORLD_SIZE as usize) / 16;
+    pub static ref VIEW_DISTANCE: usize = 2;
 }
 fn main() {
     let (tx, rx) = unbounded();
@@ -38,7 +39,7 @@ fn main() {
     let mut state: Arc<Mutex<Vec<RenderMsg>>> = Arc::new(Mutex::new(vec![]));
     let mut rng = rand::thread_rng();
     let random_number = rng.gen_range(0..=100_000);
-    let mut player: Entity = Entity::gen_player(random_number, 0.0, 0.0);
+    let mut player: Entity = Entity::gen_player(random_number, 0.0, 0.0, 0.0);
     let mut step = 0;
     let mut step_increment = 1;
     let mut camera = Camera::new();
@@ -102,18 +103,25 @@ fn main() {
     let mut state_clone = Arc::clone(&state);
     thread::spawn(move || loop {
         let _ = tx.send(state.lock().unwrap().clone());
-	state.lock().unwrap().clear();
+        state.lock().unwrap().clear();
         step += step_increment;
         if let Some(ref p) = p {
-            let result = task::block_on(fetch_chunk(p.ccoords.x, p.ccoords.y, 0));
-            match result {
-                Ok(chunk) => {
-                    state_clone
-                        .lock()
-                        .unwrap()
-                        .push(RenderMsg::from(chunk.clone(), chunk.inquire_news()));
+            for i in (p.ccoords.x as i32 - (*(VIEW_DISTANCE) as i32))..(p.ccoords.x as f32 + *VIEW_DISTANCE as f32) as i32 {
+                for j in (p.ccoords.y as i32 - (*(VIEW_DISTANCE) as i32))..(p.ccoords.y as f32 + *VIEW_DISTANCE as f32) as i32 {
+		    if i < 0 || j < 0 || i > *WORLD_SIZE as i32 || j > *WORLD_SIZE as i32 {
+			continue;
+		    }
+                    let result = task::block_on(fetch_chunk(j as f32, i as f32, 0));
+                    match result {
+                        Ok(chunk) => {
+                            state_clone
+                                .lock()
+                                .unwrap()
+                                .push(RenderMsg::from(chunk.clone(), chunk.inquire_news()));
+                        }
+                        Err(e) => eprintln!("Error fetching chunk: {}", e),
+                    }
                 }
-                Err(e) => eprintln!("Error fetching chunk: {}", e),
             }
         } else {
             let result = task::block_on(fetch_chunk(0.0, 0.0, 0));

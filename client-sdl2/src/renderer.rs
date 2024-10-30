@@ -1,6 +1,6 @@
 use crate::bitmap::*;
 use crate::util::{ClientMsg, MainMsg, RenderMsg};
-use crate::worldgen::{Entity, Camera, Chunk, Coords, Faction, CHUNK_SIZE, TILE_SIZE};
+use crate::worldgen::{Entity, Camera, Chunk, Coords_f32, Coords_i32, Faction, CHUNK_SIZE, TILE_SIZE, HashableF32};
 use std::collections::HashSet;
 use lazy_static::lazy_static;
 use sdl2::event::{Event, WindowEvent};
@@ -13,7 +13,7 @@ lazy_static! {
     pub static ref WINDOW_WIDTH: u32 = 1240;
     pub static ref WINDOW_HEIGHT: u32 = 760;
     pub static ref DEFAULT_ZOOM: i32 = 1;
-    pub static ref CAMERA_STEP: f32 = 32.0;
+    pub static ref CAMERA_STEP: HashableF32 = HashableF32(32.0);
 }
 struct InputBuffer {
     ang: f32,
@@ -65,13 +65,13 @@ pub fn render_server(
             Some(ref r) => {
                 for message in r {
                     let chunk = &message.chunk;
-                    if chunk.coords.x as i32 * camera.zoom < (camera.ccoords.x) as i32 * camera.zoom
-                        || chunk.coords.y as i32 * camera.zoom
+                    if chunk.coords.x * camera.zoom < (camera.ccoords.x) as i32 * camera.zoom
+                        || chunk.coords.y * camera.zoom
                             < (camera.ccoords.y) as i32 * camera.zoom
-                        || chunk.coords.x as i32 * camera.zoom
+                        || chunk.coords.x * camera.zoom
                             > (camera.ccoords.x as i32 + *WINDOW_WIDTH as i32 * *CHUNK_SIZE as i32)
                                 * camera.zoom
-                        || chunk.coords.y as i32 * camera.zoom
+                        || chunk.coords.y * camera.zoom
                             > (camera.ccoords.y as i32 + *WINDOW_HEIGHT as i32 * *CHUNK_SIZE as i32)
                                 * camera.zoom
                     {
@@ -168,11 +168,6 @@ pub fn render_server(
                             _ => input_buffer.ang, // No change for invalid states
                         };
                     }
-                    if trigger_refresh {
-                        canvas.set_draw_color(Color::RGB(0, 0, 0));
-                        canvas.clear();
-                        trigger_refresh = false;
-                    }
                     if news {
                         let mut row = 0;
                         let mut index = 0;
@@ -195,10 +190,10 @@ pub fn render_server(
                                         '#' => {
                                             let _ = canvas.fill_rect(Rect::new(
                                                 k2.0 * *TILE_SIZE as i32 * camera.zoom
-                                                    + camera.coords.x as i32
+                                                    + camera.coords.x.as_i32()
                                                     + index * char_span,
                                                 k2.1 * *TILE_SIZE as i32 * camera.zoom
-                                                    + camera.coords.y as i32
+                                                    + camera.coords.y.as_i32()
                                                     + row * row_span
                                                     + 16
                                                     + i as i32 * row_span,
@@ -218,11 +213,11 @@ pub fn render_server(
                     }
                     for m in &chunk.tiles {
                         let mut color = (
-                            (255.0 - (1.0 * m.height as f32 / 0.0) * 255.0) as u8,
-                            (255.0 - (1.0 * m.height as f32 / 10.0) * 255.0) as u8,
-                            (255.0 - (1.0 * m.height as f32 / 0.0) * 255.0) as u8,
+                            (255.0 - (1.0 * m.coords.z as f32 / 0.0) * 255.0) as u8,
+                            (255.0 - (1.0 * m.coords.z as f32 / 10.0) * 255.0) as u8,
+                            (255.0 - (1.0 * m.coords.z as f32 / 0.0) * 255.0) as u8,
                         );
-                        if m.height < 0 {
+                        if m.coords.z < 0 {
                             color.0 = 0;
                             color.1 = 0;
                             color.2 = 255;
@@ -230,9 +225,9 @@ pub fn render_server(
                         canvas.set_draw_color(Color::RGB(color.0, color.1, color.2));
                         let _ = canvas.fill_rect(Rect::new(
                             m.coords.x as i32 * *TILE_SIZE as i32 * camera.zoom
-                                + camera.coords.x as i32,
+                                + camera.coords.x.as_i32(),
                             m.coords.y as i32 * *TILE_SIZE as i32 * camera.zoom
-                                + camera.coords.y as i32,
+                                + camera.coords.y.as_i32(),
                             *TILE_SIZE * camera.zoom as u32,
                             *TILE_SIZE * camera.zoom as u32,
                         ));
@@ -246,19 +241,19 @@ pub fn render_server(
                         color.2 = 0;
                         canvas.set_draw_color(Color::RGB(color.0, color.1, color.2));
                         let _ = canvas.fill_rect(Rect::new(
-                            m.coords.x as i32 * *TILE_SIZE as i32 * camera.zoom
-                                + camera.coords.x as i32,
-                            m.coords.y as i32 * *TILE_SIZE as i32 * camera.zoom
-                                + camera.coords.y as i32,
+                            m.coords.x.as_i32() * *TILE_SIZE as i32 * camera.zoom
+                                + camera.coords.x.as_i32(),
+                            m.coords.y.as_i32() * *TILE_SIZE as i32 * camera.zoom
+                                + camera.coords.y.as_i32(),
                             *TILE_SIZE * camera.zoom as u32,
                             *TILE_SIZE * camera.zoom as u32,
                         ));
-                        m.ang = input_buffer.ang;
+                        m.ang = HashableF32(input_buffer.ang);
                         if input_buffer.forward {
-                            m.vel.0 = input_buffer.ang.sin() * 1.0;
-                            m.vel.1 = -input_buffer.ang.cos() * 1.0;
-                            m.coords.x += m.vel.0 * delta_seconds;
-                            m.coords.y += m.vel.1 * delta_seconds;
+                            m.vel.x = HashableF32(input_buffer.ang.sin() * 1.0);
+                            m.vel.y = HashableF32(-input_buffer.ang.cos() * 1.0);
+                            m.coords.x += HashableF32(m.vel.x.0 * delta_seconds);
+                            m.coords.y += HashableF32(m.vel.y.0 * delta_seconds);
                         }
                         let _ = sx_client.send(ClientMsg::from(m.clone()));
                     }
@@ -274,10 +269,10 @@ pub fn render_server(
                         color.2 = 0;
                         canvas.set_draw_color(Color::RGB(color.0, color.1, color.2));
                         let _ = canvas.fill_rect(Rect::new(
-                            m.coords.x as i32 * *TILE_SIZE as i32 * camera.zoom
-                                + camera.coords.x as i32,
-                            m.coords.y as i32 * *TILE_SIZE as i32 * camera.zoom
-                                + camera.coords.y as i32,
+                            m.coords.x.as_i32() * *TILE_SIZE as i32 * camera.zoom
+                                + camera.coords.x.as_i32(),
+                            m.coords.y.as_i32() * *TILE_SIZE as i32 * camera.zoom
+                                + camera.coords.y.as_i32(),
                             *TILE_SIZE * camera.zoom as u32,
                             *TILE_SIZE * camera.zoom as u32,
                         ));
@@ -320,10 +315,10 @@ pub fn render_server(
                             }
                         };
                         let _ = canvas.fill_rect(Rect::new(
-                            chunk.coords.x as i32 * *CHUNK_SIZE as i32 * camera.zoom
-                                + camera.coords.x as i32,
-                            chunk.coords.y as i32 * *CHUNK_SIZE as i32 * camera.zoom
-                                + camera.coords.y as i32,
+                            chunk.coords.x * *CHUNK_SIZE as i32 * camera.zoom
+                                + camera.coords.x.as_i32(),
+                            chunk.coords.y * *CHUNK_SIZE as i32 * camera.zoom
+                                + camera.coords.y.as_i32(),
                             *CHUNK_SIZE * *TILE_SIZE * camera.zoom as u32,
                             *CHUNK_SIZE * *TILE_SIZE * camera.zoom as u32,
                         ));
@@ -333,6 +328,8 @@ pub fn render_server(
             None => {}
         }
         canvas.present();
+	canvas.set_draw_color(Color::RGB(0, 0, 0));
+	canvas.clear();
         let _ = sx.send(MainMsg::from(camera.clone(), player.clone(), true));
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
