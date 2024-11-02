@@ -1,4 +1,4 @@
-use crate::math::dist;
+use crate::math::{dist_f32_f32, dist_f32_i32};
 use lazy_static::lazy_static;
 use noise::{NoiseFn, Perlin};
 use rand::prelude::SliceRandom;
@@ -6,6 +6,9 @@ use rand::Rng;
 use rayon::prelude::*;
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
+use sha2::{Sha256, Digest};
+use std::hash::{Hash, Hasher};
+use std::ops::{Add, Sub, Div, AddAssign, SubAssign};
 lazy_static! {
     pub static ref WORLD_SIZE: u32 = 4;
     pub static ref CHUNK_SIZE: u32 = 64;
@@ -27,10 +30,95 @@ lazy_static! {
     ];
     pub static ref GENDERS: Vec<Gender> = vec![Gender::Male, Gender::Female];
 }
-#[derive(Clone, Debug)]
+
+#[derive(Copy, Clone, Deserialize, Serialize, Debug)]
+pub struct HashableF32(pub f32);
+
+impl Hash for HashableF32 {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Floor the value and cast to an integer before hashing
+        let floored = self.0.floor() as i32;
+        floored.hash(state);
+    }
+}// Implement AddAssign trait for FlooredF32
+impl AddAssign for HashableF32{
+    fn add_assign(&mut self, other: Self) {
+        self.0 += other.0;
+    }
+}
+
+// Implement SubAssign trait for FlooredF32
+impl SubAssign for HashableF32 {
+    fn sub_assign(&mut self, other: Self) {
+        self.0 -= other.0;
+    }
+}
+
+impl Eq for HashableF32 {}
+
+// Implement Add trait for HashableF32
+impl Add for HashableF32 {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        HashableF32(self.0 + other.0)
+    }
+}
+
+// Implement Sub trait for HashableF32
+impl Sub for HashableF32 {
+    type Output = Self;
+
+    fn sub(self, other: Self) -> Self {
+        HashableF32(self.0 - other.0)
+    }
+}
+
+// Implement Div trait for HashableF32
+impl Div for HashableF32 {
+    type Output = Self;
+
+    fn div(self, other: Self) -> Self {
+        HashableF32(self.0 / other.0)
+    }
+}
+
+// Implement other necessary traits for convenience
+impl PartialEq for HashableF32{
+    fn eq(&self, other: &Self) -> bool {
+        self.0.floor() == other.0.floor()
+    }
+}
+impl TryInto<i32> for HashableF32{
+    type Error = &'static str;
+
+    fn try_into(self) -> Result<i32, Self::Error> {
+        let floored_value = self.0.floor();
+        
+        // Check if the floored value is within i32 range
+        if floored_value < (i32::MIN as f32) || floored_value > (i32::MAX as f32) {
+            Err("Value is out of range for i32")
+        } else {
+            Ok(floored_value as i32)
+        }
+    }
+}
+impl HashableF32 {
+
+    pub fn sqrt(&self) -> Self {
+        HashableF32(self.0.sqrt())
+    }
+    pub fn as_i32(&self) -> i32 {
+        self.0.floor() as i32
+    }
+    pub fn as_f32(&self) -> f32 {
+        self.0 as f32
+    }
+}
+#[derive(Clone, Debug, Hash)]
 pub struct Camera {
-    pub coords: Coords,
-    pub ccoords: Coords,
+    pub coords: Coords_f32,
+    pub ccoords: Coords_i32,
     pub render_distance_w: i32,
     pub render_distance_h: i32,
     pub zoom: i32,
@@ -38,19 +126,19 @@ pub struct Camera {
 impl Camera {
     pub fn new() -> Camera {
         Camera {
-            coords: Coords::new(),
-            ccoords: Coords::new(),
+            coords: Coords_f32::new(),
+            ccoords: Coords_i32::new(),
             render_distance_w: 128 as i32,
             render_distance_h: 128 as i32,
             zoom: 1,
         }
     }
     pub fn tick(&mut self) {
-        self.ccoords.x = self.coords.x / *CHUNK_SIZE as f32;
-        self.ccoords.y = self.coords.y / *CHUNK_SIZE as f32;
+        self.ccoords.x = (self.coords.x.0 as f32 / *CHUNK_SIZE as f32) as i32;
+        self.ccoords.y = (self.coords.y.0 as f32 / *CHUNK_SIZE as f32) as i32;
     }
 }
-#[derive(Clone, Deserialize, Serialize, Debug)]
+#[derive(Clone, Deserialize, Serialize, Debug, Hash)]
 pub struct Tasks {
     build: (u8, bool),
     fight: (u8, bool),
@@ -71,7 +159,7 @@ impl Tasks {
         }
     }
 }
-#[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
+#[derive(Clone, PartialEq, Serialize, Deserialize, Debug, Hash)]
 pub enum Gender {
     Male,
     Female,
@@ -93,27 +181,26 @@ pub fn gen_human_name(faction: Faction, gender: &Gender) -> String {
             .to_string(),
     }
 }
-#[derive(Hash, Eq, PartialEq, Clone, Serialize, Deserialize, Debug)]
+#[derive(Eq, PartialEq, Clone, Serialize, Deserialize, Debug, Hash)]
 pub enum Item {
     Bread,
     Coin,
 }
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, Hash)]
 pub struct Inventory {
-    items: HashMap<Item, i32>,
+    items: Vec<Item>,
 }
 impl Inventory {
     pub fn new() -> Inventory {
         Inventory {
-            items: HashMap::new(),
+            items: vec![] 
         }
     }
     pub fn get_coins(&self) -> i32 {
-        let count = self.items.get(&Item::Coin).unwrap_or(&0);
-        *count
+	return 0;
     }
 }
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, Hash)]
 pub struct Stats {
     health: i8,
     hunger: u8,
@@ -121,7 +208,7 @@ pub struct Stats {
     intelligence: u8,
     agility: u8,
 }
-#[derive(Clone, Eq, Hash, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize, Hash)]
 pub enum Faction {
     Empty,
     Hiisi,
@@ -131,7 +218,7 @@ pub enum Faction {
     Kalevala,
     Novgorod,
 }
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, Hash)]
 pub struct Personality {
     aggression: u8,
 }
@@ -146,7 +233,7 @@ impl Personality {
         }
     }
 }
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, Hash)]
 pub struct Alignment {
     pub faction: Faction,
     pub personality: Personality,
@@ -186,57 +273,90 @@ impl Stats {
         }
     }
 }
-#[derive(Clone, Serialize, PartialEq, Deserialize, Debug)]
+#[derive(Clone, Serialize, PartialEq, Deserialize, Debug, Hash)]
 pub enum Status {
     Talking,
     Fighting,
     Idle,
 }
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, Hash)]
 pub enum TileType {
     Grass,
     WoodenWall,
 }
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, Hash)]
 pub enum EntityType {
     Human,
 }
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct Coords {
-    pub x: f32,
-    pub y: f32,
+#[derive(Clone, Serialize, Deserialize, Debug, Hash)]
+pub struct Coords_i32 {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
 }
+impl Coords_i32 {
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+    pub fn as_bytes(&self) -> Result<Vec<u8>, bincode::Error> {
+	bincode::serialize(self)
+    }
+}
+#[derive(Clone, Serialize, Deserialize, Debug, Hash)]
+pub struct Coords_f32 {
+    pub x: HashableF32,
+    pub y: HashableF32,
+    pub z: HashableF32,
+}
+impl Coords_f32 {
+
+    pub fn as_bytes(&self) -> Result<Vec<u8>, bincode::Error> {
+	bincode::serialize(self)
+    }
+}
+#[derive(Clone, Serialize, Deserialize, Debug, Hash)]
 pub struct Size {
     pub x: i32,
     pub y: i32,
+    pub z: i32,
 }
 impl Size {
-    pub fn from(size: (i32, i32)) -> Size {
+    pub fn from(size: (i32, i32, i32)) -> Size {
         Size {
             x: size.0,
             y: size.1,
+            z: size.2,
         }
     }
 }
-impl Coords {
-    pub fn from(coords: (f32, f32)) -> Coords {
-        Coords {
+impl Coords_f32 {
+    pub fn from(coords: (f32, f32, f32)) -> Coords_f32 {
+        Coords_f32 {
+            x: HashableF32(coords.0),
+            y: HashableF32(coords.1),
+            z: HashableF32(coords.2),
+        }
+    }
+    pub fn new() -> Coords_f32 {
+        Coords_f32 { x: HashableF32(0.0), y: HashableF32(0.0), z: HashableF32(0.0) }
+    }
+}
+impl Coords_i32 {
+    pub fn from(coords: (i32, i32, i32)) -> Coords_i32 {
+        Coords_i32 {
             x: coords.0,
             y: coords.1,
+            z: coords.2,
         }
     }
-    pub fn new() -> Coords {
-        Coords { x: 0.0, y: 0.0 }
+    pub fn new() -> Coords_i32 {
+        Coords_i32 { x: 0, y: 0, z: 0 }
     }
 }
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, Hash)]
 pub struct Entity {
-    pub coords: Coords,
-    pub ccoords: Coords,
-    pub vel: (f32, f32),
-    pub ang: f32,
+    pub coords: Coords_f32,
+    pub ccoords: Coords_i32,
+    pub vel: Coords_f32,
+    pub ang: HashableF32,
     pub etype: EntityType,
     pub stats: Stats,
     pub status: Status,
@@ -251,10 +371,10 @@ pub struct Entity {
 impl Entity {
     pub fn new(index: usize) -> Entity {
         Entity {
-            coords: Coords::new(),
-            ccoords: Coords::new(),
-            vel: (0.0, 0.0),
-            ang: 0.0,
+            coords: Coords_f32::new(),
+            ccoords: Coords_i32::new(),
+            vel: Coords_f32::new(),
+            ang: HashableF32(0.0),
             etype: EntityType::Human,
             stats: Stats::new(),
             status: Status::Idle,
@@ -267,12 +387,12 @@ impl Entity {
 	    current_world: 0,
         }
     }
-    pub fn gen_player(id: usize, x:f32, y:f32) -> Entity {
+    pub fn gen_player(id: usize, x:f32, y:f32, z: f32) -> Entity {
         Entity {
-            coords: Coords::from((x,y)),
-            ccoords: Coords::from(((x/ *CHUNK_SIZE as f32).floor(), (y / *CHUNK_SIZE as f32).floor())),
-            vel: (0.0, 0.0),
-            ang: 0.0,
+            coords: Coords_f32::from((x,y,z)),
+            ccoords: Coords_i32::from(((x/ *CHUNK_SIZE as f32).floor() as i32, (y / *CHUNK_SIZE as f32).floor() as i32, (z / *CHUNK_SIZE as f32).floor() as i32)),
+            vel: Coords_f32::new(),
+            ang: HashableF32(0.0),
             etype: EntityType::Human,
             stats: Stats::new(),
             status: Status::Idle,
@@ -287,8 +407,8 @@ impl Entity {
     }
     pub fn from(
         index: usize,
-        coords: Coords,
-        vel: (f32, f32),
+        coords: Coords_f32,
+        vel: (f32, f32, f32),
         etype: EntityType,
         stats: Stats,
         alignment: Alignment,
@@ -298,10 +418,10 @@ impl Entity {
     ) -> Entity {
         Entity {
             coords: coords.clone(),
-            ccoords: Coords::from(((coords.x / *CHUNK_SIZE as f32).floor(), (coords.y / *CHUNK_SIZE as f32).floor())),
+            ccoords: Coords_i32::from(((coords.x / HashableF32(*CHUNK_SIZE as f32)).as_i32() , (coords.y  / HashableF32(*CHUNK_SIZE as f32)).as_i32(), (coords.z / HashableF32(*CHUNK_SIZE as f32)).as_i32())),
             etype: etype,
-            vel: (0.0, 0.0),
-            ang: 0.0,
+            vel: Coords_f32::new(),
+            ang: HashableF32(0.0),
             stats: stats,
             status: Status::Idle,
             index: index,
@@ -318,7 +438,8 @@ impl Entity {
 
         // self.coords.x += step_increment as f32 * self.vel.0;
         // self.coords.y += step_increment as f32 * self.vel.1;
-
+	self.ccoords.x = (self.coords.x / HashableF32(*CHUNK_SIZE as f32)).as_i32();
+	self.ccoords.y = (self.coords.y / HashableF32(*CHUNK_SIZE as f32)).as_i32();
         if self.stats.hunger > 0 {
             self.stats.hunger -= 1;
         }
@@ -338,7 +459,7 @@ impl Entity {
     pub fn resolve_against(&mut self, other: &mut Entity, step_increment: i32) {
         let mut rng = rand::thread_rng();
         let roll = rng.gen_range(0..10);
-        if dist(&self.coords, &other.coords) <= *VICINITY_DIST {
+        if dist_f32_f32(&self.coords, &other.coords) <= *VICINITY_DIST {
             if other.status == Status::Fighting {
                 let dmg = other.stats.strength * roll;
                 self.stats.health -= dmg as i8;
@@ -349,12 +470,11 @@ impl Entity {
         }
     }
 }
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, Hash)]
 pub struct Tile {
-    pub coords: Coords,
+    pub coords: Coords_i32,
     pub index: usize,
     pub size: Size,
-    pub height: i32,
     pub ttype: TileType,
     pub holds: Option<Entity>,
     pub designed: Option<TileType>,
@@ -362,10 +482,9 @@ pub struct Tile {
 
 impl Tile {
     pub fn from(
-        coords: Coords,
+        coords: Coords_i32,
         index: usize,
         size: Size,
-        height: i32,
         ttype: TileType,
         holds: Option<Entity>,
     ) -> Tile {
@@ -373,40 +492,56 @@ impl Tile {
             coords,
             index,
             size,
-            height,
             ttype,
             holds,
             designed: None,
         }
     }
+    pub fn as_bytes(&self) -> Result<Vec<u8>, bincode::Error> {
+	bincode::serialize(self)
+    }
 }
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, Hash)]
 pub struct Chunk {
     pub tiles: Vec<Tile>,
     pub entities: Vec<Entity>,
-    pub coords: Coords,
+    pub coords: Coords_i32,
     pub index: usize,
+    pub hash: u64, 
 }
 
 impl Chunk {
-    pub fn from(tiles: Vec<Tile>, entities: Vec<Entity>, coords: Coords, index: usize) -> Chunk {
+    pub fn from(tiles: Vec<Tile>, entities: Vec<Entity>, coords: Coords_i32, index: usize, hash: u64) -> Chunk {
         Chunk {
             tiles,
             entities,
             coords,
             index,
+	    hash,
         }
+    }
+    pub fn as_bytes(&self) -> Result<Vec<u8>, bincode::Error> {
+	bincode::serialize(self)
+    }
+    pub fn as_string(&self) -> Result<String, serde_json::Error> {
+	serde_json::to_string(self)
     }
     pub fn new() -> Chunk {
         Chunk {
             tiles: vec![],
             entities: vec![],
-            coords: Coords::new(),
+            coords: Coords_i32::new(),
             index: 0,
+	    hash: 0,
         }
     }
     pub fn resolve(&mut self, step_increment: i32) {
-        for i in 0..step_increment {
+        let mut hasher = Sha256::new();
+        hasher.update(bincode::serialize(&self.tiles).unwrap());
+        hasher.update(bincode::serialize(&self.entities).unwrap());
+        let result = hasher.finalize();
+	self.hash = u64::from_le_bytes(result[0..8].try_into().expect("Failed to get 8 bytes"));
+	for i in 0..step_increment {
             for _t in &mut self.tiles {}
             let mut entities_clone = self.entities.clone();
             for clone in &mut entities_clone {
@@ -484,8 +619,8 @@ impl Chunk {
             if height > 0 && !discard_entities && rng.gen_range(0..32) == 1 {
                 entities.push(Entity::from(
                     c as usize,
-                    Coords::from((x as f32, y as f32)),
-                    (0.0, 0.0),
+                    Coords_f32::from((x as f32, y as f32, height as f32)),
+                    (0.0, 0.0, 0.0),
                     EntityType::Human,
                     Stats::gen(),
                     Alignment::from(faction.clone()),
@@ -495,10 +630,9 @@ impl Chunk {
                 ))
             }
             tiles.push(Tile::from(
-                Coords::from((x as f32, y as f32)),
+                Coords_i32::from((x, y, height as i32)),
                 c as usize,
-                Size::from((*TILE_SIZE as i32, *TILE_SIZE as i32)),
-                height,
+                Size::from((*TILE_SIZE as i32, *TILE_SIZE as i32, *TILE_SIZE as i32)),
                 TileType::Grass,
                 None,
             ));
@@ -508,6 +642,7 @@ impl Chunk {
             entities: entities,
             coords: self.coords.clone(),
             index: self.index,
+	    hash: 0,
         }
     }
     pub fn fetch_tile(&self, index: usize) -> &Tile {
@@ -526,7 +661,7 @@ impl Chunk {
         News::from(news)
     }
 }
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, Hash)]
 pub struct News {
     pub newscast: Vec<String>,
 }
@@ -538,7 +673,7 @@ impl News {
         News { newscast: newscast }
     }
 }
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, Hash)]
 pub struct World {
     pub chunks: Vec<Chunk>,
 }
@@ -586,8 +721,9 @@ pub fn worldgen(seed: u32) -> World {
         chunks.push(Chunk::from(
             vec![],
             vec![],
-            Coords::from((x, y)),
+            Coords_i32::from((x as i32, y as i32, 0)),
             c as usize,
+	    0,
         ));
     }
     chunks.par_iter_mut().for_each(|c| *c = c.gen(seed));
