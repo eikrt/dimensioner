@@ -15,7 +15,7 @@ use std::time::Duration;
 use lazy_static::lazy_static;
 lazy_static! {
     pub static ref PARTITION_SIZE: usize = (*WORLD_SIZE as usize * *WORLD_SIZE as usize) / 16;
-    pub static ref VIEW_DISTANCE: usize = 2;
+    pub static ref VIEW_DISTANCE: usize = 4;
 }
 fn main() {
     let (tx, rx) = unbounded();
@@ -80,46 +80,54 @@ fn main() {
     });
     let mut partition = 0;
     let mut state_clone = Arc::clone(&state);
-    // thread::spawn(move || loop {
-    // 	state_clone.lock().unwrap().clear();
-    //     for i in 0..*WORLD_SIZE {
-    //         for j in 0..*WORLD_SIZE {
-    //             let result = task::block_on(fetch_chunk(j as f32, i as f32, 0));
-    //             match result {
-    //                 Ok(chunk) => {
-    //                     state_clone
-    //                         .lock()
-    //                         .unwrap()
-    //                         .push(RenderMsg::from(chunk.clone(), chunk.inquire_news()));
-    //                 }
-    //                 Err(e) => eprintln!("Error fetching chunk: {}", e),
-    //             }
-    //         }
-    //     }
-    // 	println!("done");
-    //     ::std::thread::sleep(Duration::new(15, 0));
-    // });
     let mut p: Option<Entity> = None;
+    let mut p_server_from: Option<Entity> = None;
+    let mut p_server_local: Option<Entity> = None;
     let mut state_clone = Arc::clone(&state);
     thread::spawn(move || loop {
         let _ = tx.send(state.lock().unwrap().clone());
-        state.lock().unwrap().clear();
         step += step_increment;
         if let Some(ref p) = p {
-            for i in (p.ccoords.x as i32 - (*(VIEW_DISTANCE) as i32))..(p.ccoords.x as f32 + *VIEW_DISTANCE as f32) as i32 {
-                for j in (p.ccoords.y as i32 - (*(VIEW_DISTANCE) as i32))..(p.ccoords.y as f32 + *VIEW_DISTANCE as f32) as i32 {
-		    if i < 0 || j < 0 || i > *WORLD_SIZE as i32 || j > *WORLD_SIZE as i32 {
-			continue;
-		    }
-                    let result = task::block_on(fetch_chunk(j as f32, i as f32, 0));
-                    match result {
-                        Ok(chunk) => {
-                            state_clone
-                                .lock()
-                                .unwrap()
-                                .push(RenderMsg::from(chunk.clone(), chunk.inquire_news()));
+            if let Some(ref p_s) = p_server_local {
+                for i in (p_s.ccoords.x as i32 - (*(VIEW_DISTANCE) as i32))
+                    ..((p_s.ccoords.x as i32 + *VIEW_DISTANCE as i32) as i32)
+                {
+                    for j in (p_s.ccoords.y as i32 - (*(VIEW_DISTANCE) as i32))
+                        ..((p_s.ccoords.y as i32 + *VIEW_DISTANCE as i32) as i32)
+                    {
+                        if i < 0 || j < 0 || i > *WORLD_SIZE as i32 || j > *WORLD_SIZE as i32 {
+                            continue;
                         }
-                        Err(e) => eprintln!("Error fetching chunk: {}", e),
+                        let result = task::block_on(fetch_chunk(j as f32, i as f32, 0));
+                        match result {
+                            Ok(chunk) => {
+                                let mut state = state.lock().unwrap();
+                                if let Some(index) = state
+                                    .iter()
+                                    .position(|c| c.chunk.coords.x == j && c.chunk.coords.y == i)
+                                {
+                                    let chunk_clone = chunk.clone();
+                                    for e in &chunk_clone.entities {
+                                        if e.index == p.index {
+                                            p_server_from = Some(e.clone());
+                                        }
+                                    }
+                                    if state[index].chunk.hash != chunk.hash {
+                                        state.remove(index);
+                                        state.push(RenderMsg::from(
+                                            chunk.clone(),
+                                            chunk.inquire_news(),
+                                        ));
+                                        //println!("Replaced chunk at ({}, {}) with new data.", j, i);
+                                    }
+                                } else {
+                                    state
+                                        .push(RenderMsg::from(chunk.clone(), chunk.inquire_news()));
+                                    println!("Added new chunk at ({}, {})", j, i);
+                                }
+                            }
+                            Err(e) => eprintln!("Error fetching chunk: {}", e),
+                        }
                     }
                 }
             }
@@ -135,9 +143,14 @@ fn main() {
                 Err(e) => eprintln!("Error fetching chunk: {}", e),
             }
         }
+        p_server_local = p_server_from.clone();
         if let Ok(x) = rx2_clone.recv() {
             camera = x.camera;
             p = x.player;
+            p_server_local = match p_server_local {
+                Some(s) => Some(s),
+                None => p.clone(),
+            };
         }
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
         partition += 1;

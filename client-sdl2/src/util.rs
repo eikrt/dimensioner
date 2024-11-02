@@ -1,6 +1,6 @@
 use crate::worldgen::{Camera, Entity, Chunk, News};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RenderMsg {
     pub chunk: Chunk,
     pub news: News,
@@ -13,7 +13,7 @@ impl RenderMsg {
         }
     }
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MainMsg {
     pub camera: Camera,
     pub player: Option<Entity>,
@@ -29,7 +29,7 @@ impl MainMsg {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ClientMsg {
     pub player: Entity,
 }
