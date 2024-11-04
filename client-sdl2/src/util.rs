@@ -1,4 +1,5 @@
 use crate::worldgen::{Camera, Entity, Chunk, News};
+use serde::{Serialize, Deserialize};
 
 #[derive(Clone, Debug)]
 pub struct RenderMsg {
@@ -32,11 +33,30 @@ impl MainMsg {
 #[derive(Clone, Debug)]
 pub struct ClientMsg {
     pub player: Entity,
+    pub action: ActionType,
 }
 impl ClientMsg{
-    pub fn from(player: Entity) -> ClientMsg{
+    pub fn from(player: Entity, action: ActionType) -> ClientMsg{
         ClientMsg {
             player: player,
+	    action: action,
         }
     }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ClientData {
+    pub entity: Entity,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum ActionType {
+    Empty,
+    ConstructCannon,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ActionData {
+    pub action: ActionType,
+    pub entity: Entity,
 }

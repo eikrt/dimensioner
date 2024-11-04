@@ -1,5 +1,5 @@
 use crate::bitmap::*;
-use crate::util::{ClientMsg, MainMsg, RenderMsg};
+use crate::util::{ActionType, ClientMsg, MainMsg, RenderMsg};
 use crate::worldgen::{
     Camera, Chunk, Coords_f32, Coords_i32, Entity, Faction, HashableF32, Tile, CHUNK_SIZE,
     TILE_SIZE,
@@ -25,6 +25,7 @@ lazy_static! {
 struct InputBuffer {
     ang: f32,
     forward: bool,
+    c_pressed: bool
 }
 
 struct TileCache<'a> {
@@ -150,6 +151,7 @@ pub fn render_server(
     let mut input_buffer: InputBuffer = InputBuffer {
         ang: 0.0,
         forward: false,
+	c_pressed: false,
     };
     let mut last_frame_time = Instant::now();
     let mut r: Option<Vec<RenderMsg>> = None;
@@ -222,6 +224,9 @@ pub fn render_server(
                             canvas.set_draw_color(Color::RGB(0, 0, 0));
                             canvas.clear();
                         }
+                        Keycode::C => {
+			    input_buffer.c_pressed = true;
+                        }
                         _ => {}
                     }
                     trigger_refresh = true;
@@ -288,27 +293,6 @@ pub fn render_server(
             {
                 continue;
             }
-            // for m in &chunk.tiles {
-            //     let mut color = (
-            //         (255.0 - (1.0 * m.coords.z as f32 / 0.0) * 255.0) as u8,
-            //         (255.0 - (1.0 * m.coords.z as f32 / 10.0) * 255.0) as u8,
-            //         (255.0 - (1.0 * m.coords.z as f32 / 0.0) * 255.0) as u8,
-            //     );
-            //     if m.coords.z < 0 {
-            //         color.0 = 0;
-            //         color.1 = 0;
-            //         color.2 = 255;
-            //     }
-            //     canvas.set_draw_color(Color::RGB(color.0, color.1, color.2));
-            //     let _ = canvas.fill_rect(Rect::new(
-            //         m.coords.x as i32 * *TILE_SIZE as i32 * camera.zoom
-            //             + camera.coords.x.as_i32(),
-            //         m.coords.y as i32 * *TILE_SIZE as i32 * camera.zoom
-            //             + camera.coords.y.as_i32(),
-            //         *TILE_SIZE * camera.zoom as u32,
-            //         *TILE_SIZE * camera.zoom as u32,
-            //     ));
-            // }
             if factions {
                 let counts: HashMap<Faction, usize> =
                     chunk
@@ -329,23 +313,14 @@ pub fn render_server(
                     &Faction::Empty => {
                         canvas.set_draw_color(Color::RGBA(0, 0, 0, 100));
                     }
-                    &Faction::Hiisi => {
+                    &Faction::Marine => {
                         canvas.set_draw_color(Color::RGBA(255, 255, 255, 100));
                     }
-                    &Faction::Virumaa => {
+                    &Faction::Irregular => {
                         canvas.set_draw_color(Color::RGBA(0, 0, 255, 100));
                     }
-                    &Faction::Kalevala => {
+                    &Faction::Worm => {
                         canvas.set_draw_color(Color::RGBA(255, 255, 0, 100));
-                    }
-                    &Faction::Pohjola => {
-                        canvas.set_draw_color(Color::RGBA(0, 0, 255, 100));
-                    }
-                    &Faction::Tapiola => {
-                        canvas.set_draw_color(Color::RGBA(0, 255, 0, 100));
-                    }
-                    &Faction::Novgorod => {
-                        canvas.set_draw_color(Color::RGBA(255, 0, 0, 100));
                     }
                 };
                 let _ = canvas.fill_rect(Rect::new(
@@ -392,7 +367,13 @@ pub fn render_server(
                     m.coords.x += HashableF32(m.vel.x.0 * delta_seconds);
                     m.coords.y += HashableF32(m.vel.y.0 * delta_seconds);
                 }
-                let _ = sx_client.send(ClientMsg::from(m.clone()));
+		if input_buffer.c_pressed {
+                    let _ = sx_client.send(ClientMsg::from(m.clone(), ActionType::ConstructCannon));
+		    input_buffer.c_pressed = false;
+		}
+		else {
+                    let _ = sx_client.send(ClientMsg::from(m.clone(), ActionType::Empty));
+		}
             }
             if let Some(mut m) = player.clone() {
                 let mut color = ((0) as u8, 255 as u8, 0);

@@ -1,9 +1,11 @@
 use async_std::task;
 use crossbeam::channel::unbounded;
-use dimensioner_client_sdl2::net::{fetch_chunk, send_client_data, ClientData};
+use dimensioner_client_sdl2::net::{fetch_chunk, send_client_data, send_action_data};
 use dimensioner_client_sdl2::plot::plot;
 use dimensioner_client_sdl2::renderer::render_server;
-use dimensioner_client_sdl2::util::{ClientMsg, MainMsg, RenderMsg};
+use dimensioner_client_sdl2::util::{
+    ActionData, ActionType, ClientData, ClientMsg, MainMsg, RenderMsg,
+};
 use dimensioner_client_sdl2::worldgen::{worldgen, Camera, Entity, News, CHUNK_SIZE, WORLD_SIZE};
 use rand::Rng;
 use rayon::prelude::*;
@@ -45,12 +47,14 @@ fn main() {
     let mut camera = Camera::new();
     let mut vic_world = 0;
     let mut render = false;
+    let mut current_action_type = ActionType::Empty;
     thread::spawn(move || loop {
-        let _ = tx3.send(ClientMsg::from(player.clone()));
-        let _ = tx_c.send(ClientMsg::from(player.clone()));
+        let _ = tx3.send(ClientMsg::from(player.clone(), ActionType::Empty));
+        let _ = tx_c.send(ClientMsg::from(player.clone(), current_action_type.clone()));
         if let Ok(p) = rx4.recv() {
             let mut player_from = p.player;
             player = player_from;
+            current_action_type = p.action;
         }
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     });
@@ -62,8 +66,19 @@ fn main() {
         }
         // Process only the latest message, if any
         if let Some(p) = latest_message {
-            let s = ClientData { entity: p.player };
-            let result = task::block_on(send_client_data(s));
+            let s = ClientData { entity: p.player.clone() };
+            let a = ActionData {
+                entity: p.player.clone(),
+                action: p.action.clone(),
+            };
+            match p.action {
+                ActionType::Empty => {
+                    let result = task::block_on(send_client_data(s));
+                }
+                ActionType::ConstructCannon => {
+                    let result = task::block_on(send_action_data(a));
+                }
+            }
         }
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     });
