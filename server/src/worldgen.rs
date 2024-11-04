@@ -16,17 +16,17 @@ lazy_static! {
     pub static ref NOISE_SCALE: f64 = 64.0;
     pub static ref VICINITY_DIST: i32 = 4;
     pub static ref HUMAN_NAMES_F: Vec<String> = vec![
-        "Kirsika".to_string(),
-        "Markus".to_string(),
-        "Annika".to_string(),
-        "Maris".to_string()
+        "Kate".to_string(),
+        "Elsa".to_string(),
+        "Karen".to_string(),
+        "Jade".to_string()
     ];
     pub static ref HUMAN_NAMES_M: Vec<String> = vec![
-        "Hans".to_string(),
-        "Sten".to_string(),
-        "Markus".to_string(),
-        "Maris".to_string(),
-        "Karl".to_string()
+        "John".to_string(),
+        "Jack".to_string(),
+        "Jacques".to_string(),
+        "Tom".to_string(),
+        "Arnold".to_string()
     ];
     pub static ref GENDERS: Vec<Gender> = vec![Gender::Male, Gender::Female];
 }
@@ -211,12 +211,9 @@ pub struct Stats {
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize, Hash)]
 pub enum Faction {
     Empty,
-    Hiisi,
-    Virumaa,
-    Pohjola,
-    Tapiola,
-    Kalevala,
-    Novgorod,
+    Marine,
+    Irregular,
+    Worm,
 }
 #[derive(Clone, Serialize, Deserialize, Debug, Hash)]
 pub struct Personality {
@@ -447,9 +444,9 @@ impl Entity {
         let roll = rng.gen_range(0..10);
         if self.stats.hunger == 0 {
             if self.stats.health >= 0 {
-                self.stats.health -= 2;
+                //self.stats.health -= 2;
             } else {
-                self.stats.health = 0;
+                //self.stats.health = 0;
             }
         }
         // resolve tasks
@@ -574,23 +571,23 @@ impl Chunk {
         if fac_perlin.get([self.coords.x as f64 + 0.1, self.coords.y as f64 + 0.1]) > 0.0
             && fac_perlin.get([self.coords.x as f64 + 0.1, self.coords.y as f64 + 0.1]) < 0.1
         {
-            faction = &Faction::Novgorod;
+            faction = &Faction::Worm;
         } else if fac_perlin.get([self.coords.x as f64 + 0.1, self.coords.y as f64 + 0.1]) > 0.1
             && fac_perlin.get([self.coords.x as f64 + 0.1, self.coords.y as f64 + 0.1]) < 0.2
         {
-            faction = &Faction::Virumaa;
+            faction = &Faction::Worm;
         } else if fac_perlin.get([self.coords.x as f64 + 0.1, self.coords.y as f64 + 0.1]) > 0.2
             && fac_perlin.get([self.coords.x as f64 + 0.1, self.coords.y as f64 + 0.1]) < 0.3
         {
-            faction = &Faction::Kalevala;
+            faction = &Faction::Irregular;
         } else if fac_perlin.get([self.coords.x as f64 + 0.1, self.coords.y as f64 + 0.1]) > 0.3
             && fac_perlin.get([self.coords.x as f64 + 0.1, self.coords.y as f64 + 0.1]) < 0.4
         {
-            faction = &Faction::Tapiola;
+            faction = &Faction::Irregular;
         } else if fac_perlin.get([self.coords.x as f64 + 0.1, self.coords.y as f64 + 0.1]) > 0.4
             && fac_perlin.get([self.coords.x as f64 + 0.1, self.coords.y as f64 + 0.1]) < 0.5
         {
-            faction = &Faction::Pohjola;
+            faction = &Faction::Irregular;
         } else {
             discard_entities = true;
         }

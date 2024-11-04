@@ -1,4 +1,7 @@
 use bincode;
+use dimensioner_server::util::RenderMsg;
+use dimensioner_server::util::{ActionData, ActionType, ClientData};
+use dimensioner_server::worldgen::*;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use lazy_static::lazy_static;
@@ -7,19 +10,13 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::io;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 use tokio::task;
 use tokio::time::{sleep, Duration};
 use url::{form_urlencoded, Url};
-use dimensioner_server::util::RenderMsg;
-use dimensioner_server::worldgen::{worldgen, Entity, Camera, News, CHUNK_SIZE, WORLD_SIZE};
-#[derive(Clone, Serialize, Deserialize, Debug)]
-struct ClientData {
-    entity: Entity
-}
 lazy_static! {
     pub static ref PARTITION_SIZE: usize = (*WORLD_SIZE as usize * *WORLD_SIZE as usize) / 16;
 }
@@ -32,6 +29,10 @@ async fn main() {
     let (tx_c, mut rx_c): (
         broadcast::Sender<ClientData>,
         broadcast::Receiver<ClientData>,
+    ) = broadcast::channel(256);
+    let (tx_c_a, mut rx_c_a): (
+        broadcast::Sender<ActionData>,
+        broadcast::Receiver<ActionData>,
     ) = broadcast::channel(256);
     let mut worlds = vec![];
     let mut rng = rand::thread_rng();
@@ -46,12 +47,38 @@ async fn main() {
     let mut render = false;
     // Spawn a worker thread to send "world data" every few seconds
     task::spawn(async move {
+	let mut rng = rand::thread_rng();
         let mut counter = 0;
         loop {
             match rx_c.try_recv() {
                 Ok(o) => {
-		   worlds[0].update_chunk_with_entity(o.entity); 
-		   
+                    worlds[0].update_chunk_with_entity(o.entity);
+                }
+                Err(e) => {}
+            }
+            match rx_c_a.try_recv() {
+                Ok(o) => {
+
+                    match o.action {
+			ActionType::Empty => {
+
+			},
+                        ActionType::ConstructCannon => {
+                            let entity = Entity::from(
+                                rng.gen_range(0..1000) as usize,
+				o.entity.coords,
+                                (0.0, 0.0, 0.0),
+                                EntityType::Human,
+                                Stats::gen(),
+                                Alignment::from(Faction::Marine),
+                                gen_human_name(Faction::Marine, &Gender::Other),
+                                Gender::Other,
+                                0,
+                            );
+                            worlds[0].update_chunk_with_entity(entity);
+                        }
+                    }
+                    //worlds[0].update_chunk_with_entity(o.entity);
                 }
                 Err(e) => {}
             }
@@ -73,12 +100,15 @@ async fn main() {
 
     // Create a Hyper service that will serve the data received from the broadcast channel
     let tx_c_clone = tx_c.clone();
+    let tx_c_a_clone = tx_c_a.clone();
     let make_svc = make_service_fn(move |_conn| {
         let mut rx = _rx.resubscribe();
-	let val = tx_c_clone.clone();
+        let val = tx_c_clone.clone();
+        let val2 = tx_c_a.clone();
         let service = service_fn(move |req: Request<Body>| {
             let mut rx = rx.resubscribe(); // Clone the receiver inside the async block
-	    let tx_c_clone_clone = val.clone();
+            let tx_c_clone_clone = val.clone();
+            let tx_c_a_clone_clone = val2.clone();
             async move {
                 while rx.is_empty() {}
                 match (req.method(), req.uri().path()) {
@@ -148,6 +178,35 @@ async fn main() {
                                 match bincode::deserialize::<ClientData>(&bytes) {
                                     Ok(client_data) => {
                                         let _ = tx_c_clone_clone.send(client_data);
+                                        Ok::<_, Infallible>(Response::new(Body::from(
+                                            "Client data received successfully",
+                                        )))
+                                    }
+                                    Err(_) => Ok::<_, Infallible>(
+                                        Response::builder()
+                                            .status(StatusCode::BAD_REQUEST)
+                                            .body(Body::from("Invalid data format"))
+                                            .unwrap(),
+                                    ),
+                                }
+                            }
+                            Err(_) => Ok::<_, Infallible>(
+                                Response::builder()
+                                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                                    .body(Body::from("Failed to read request body"))
+                                    .unwrap(),
+                            ),
+                        }
+                    }
+
+                    (&Method::POST, "/action_data") => {
+                        let whole_body = hyper::body::to_bytes(req.into_body()).await;
+                        match whole_body {
+                            Ok(bytes) => {
+                                // Deserialize using bincode
+                                match bincode::deserialize::<ActionData>(&bytes) {
+                                    Ok(client_data) => {
+                                        let _ = tx_c_a_clone_clone.send(client_data);
                                         Ok::<_, Infallible>(Response::new(Body::from(
                                             "Client data received successfully",
                                         )))
