@@ -66,8 +66,9 @@ fn main() {
         let _ = tx_c.send(ClientMsg::from(player.lock().unwrap().clone(), current_action_type.clone()));
         if let Ok(p) = rx4.recv() {
 	    let mut player_from = p.player;
+	    player_from.current_action = p.action.clone();
+	    current_action_type = p.action.clone();
 	    *player.lock().unwrap() = player_from;
-	    current_action_type = p.action;
         }
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     });
@@ -95,8 +96,6 @@ fn main() {
                 entity: p.player.clone(),
                 action: p.action.clone(),
             };
-            match p.action {
-                ActionType::Empty => {
                     let result = task::block_on(send_client_data(s));
 		    match result {
                         Ok(chunk) => {
@@ -114,14 +113,6 @@ fn main() {
                         },
                         Err(e) => eprintln!("Error fetching chunk: {}", e)
                     };
-		}
-                ActionType::ConstructCannon => {
-                    //let result = task::block_on(send_action_data(a));
-                }
-                ActionType::Refresh => {
-                    //let result = task::block_on(send_action_data(a));
-                }
-            }
         }
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }

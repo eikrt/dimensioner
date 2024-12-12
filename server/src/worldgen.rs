@@ -1,4 +1,5 @@
 use crate::math::{dist_f32_f32, dist_f32_i32};
+use crate::util::{ActionType};
 use lazy_static::lazy_static;
 use noise::{NoiseFn, Perlin};
 use rand::prelude::SliceRandom;
@@ -352,6 +353,7 @@ impl Coords_i32 {
 pub struct Entity {
     pub coords: Coords_f32,
     pub ccoords: Coords_i32,
+    pub current_action: ActionType,
     pub vel: Coords_f32,
     pub ang: HashableF32,
     pub etype: EntityType,
@@ -372,6 +374,7 @@ impl Entity {
             ccoords: Coords_i32::new(),
             vel: Coords_f32::new(),
             ang: HashableF32(0.0),
+	    current_action: ActionType::Empty,
             etype: EntityType::Human,
             stats: Stats::new(),
             status: Status::Idle,
@@ -388,6 +391,7 @@ impl Entity {
         Entity {
             coords: Coords_f32::from((x,y,z)),
             ccoords: Coords_i32::from(((x/ *CHUNK_SIZE as f32).floor() as i32, (y / *CHUNK_SIZE as f32).floor() as i32, (z / *CHUNK_SIZE as f32).floor() as i32)),
+	    current_action: ActionType::Empty,
             vel: Coords_f32::new(),
             ang: HashableF32(0.0),
             etype: EntityType::Human,
@@ -416,6 +420,7 @@ impl Entity {
         Entity {
             coords: coords.clone(),
             ccoords: Coords_i32::from(((coords.x / HashableF32(*CHUNK_SIZE as f32)).as_i32() , (coords.y  / HashableF32(*CHUNK_SIZE as f32)).as_i32(), (coords.z / HashableF32(*CHUNK_SIZE as f32)).as_i32())),
+	    current_action: ActionType::Empty,
             etype: etype,
             vel: Coords_f32::new(),
             ang: HashableF32(0.0),

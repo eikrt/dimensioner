@@ -29,8 +29,8 @@ async fn main() {
         broadcast::Receiver<ClientData>,
     ) = broadcast::channel(256);
     let (tx_c_a, mut rx_c_a): (
-        broadcast::Sender<ActionData>,
-        broadcast::Receiver<ActionData>,
+        broadcast::Sender<ClientData>,
+        broadcast::Receiver<ClientData>,
     ) = broadcast::channel(256);
 
     let mut worlds = vec![];
@@ -50,7 +50,7 @@ async fn main() {
                 worlds[0].update_chunk_with_entity(o.entity);
             }
             if let Ok(o) = rx_c_a.try_recv() {
-                match o.action {
+                match o.entity.current_action {
                     ActionType::Empty => {},
 		    ActionType::Refresh => {},
                     ActionType::ConstructCannon => {
@@ -100,7 +100,7 @@ async fn main() {
 async fn handle_connection(
     mut stream: TcpStream,
     tx_c: broadcast::Sender<ClientData>,
-    tx_c_a: broadcast::Sender<ActionData>,
+    tx_c_a: broadcast::Sender<ClientData>,
     mut rx: broadcast::Receiver<Vec<World>>,
 ) {
     let mut buffer = [0; 1024];
@@ -115,7 +115,8 @@ async fn handle_connection(
                 let incoming_data: Result<ClientData, _> = bincode::deserialize(&buffer[..n]);
                 if let Ok(client_data) = incoming_data {
 		    result_client_data = Some(client_data.clone());
-                    let _ = tx_c.send(client_data);
+                    let _ = tx_c.send(client_data.clone());
+                    let _ = tx_c_a.send(client_data);
                 } else if let Ok(action_data) = bincode::deserialize(&buffer[..n]) {
                     let _ = tx_c_a.send(action_data);
                 }

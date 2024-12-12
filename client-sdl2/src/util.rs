@@ -49,7 +49,7 @@ pub struct ClientData {
     pub entity: Entity,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Hash, Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub enum ActionType {
     Empty,
     Refresh,
