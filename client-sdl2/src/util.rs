@@ -44,14 +44,15 @@ impl ClientMsg{
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ClientData {
     pub entity: Entity,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub enum ActionType {
     Empty,
+    Refresh,
     ConstructCannon,
 }
 

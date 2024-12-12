@@ -1,1 +1,1 @@
-/home/eino/repo/games/dimensioner/server/src/worldgen.rs
+/home/eino/repo/dimensioner/server/worldgen.rs

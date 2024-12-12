@@ -11,7 +11,7 @@ use std::hash::{Hash, Hasher};
 use std::ops::{Add, Sub, Div, AddAssign, SubAssign};
 lazy_static! {
     pub static ref WORLD_SIZE: u32 = 4;
-    pub static ref CHUNK_SIZE: u32 = 64;
+    pub static ref CHUNK_SIZE: u32 = 16;
     pub static ref TILE_SIZE: u32 = 1;
     pub static ref NOISE_SCALE: f64 = 64.0;
     pub static ref VICINITY_DIST: i32 = 4;
@@ -689,9 +689,11 @@ impl World {
 	let y_int = y as i32;
 	&self.chunks[(y_int * *WORLD_SIZE as i32 + x_int) as usize]
     }
-    pub fn update_chunk_with_entity(&mut self, entity: Entity) {
+    pub fn update_chunk_with_entity(&mut self, mut entity: Entity) {
         let x_int = entity.ccoords.x as i32;
         let y_int = entity.ccoords.y as i32;
+	entity.ccoords.x = (entity.coords.x / HashableF32(*CHUNK_SIZE as f32)).as_i32();
+	entity.ccoords.y = (entity.coords.y / HashableF32(*CHUNK_SIZE as f32)).as_i32();
         let chunk = &mut self.chunks[(y_int * *WORLD_SIZE as i32 + x_int) as usize];
         
         // Try to find an entity with the same ID

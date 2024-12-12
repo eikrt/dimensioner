@@ -1,6 +1,6 @@
 use async_std::task;
 use crossbeam::channel::unbounded;
-use dimensioner_client_sdl2::net::{fetch_chunk, send_client_data, send_action_data};
+use dimensioner_client_sdl2::net::{send_client_data};
 use dimensioner_client_sdl2::plot::plot;
 use dimensioner_client_sdl2::renderer::render_server;
 use dimensioner_client_sdl2::util::{
@@ -30,6 +30,14 @@ fn main() {
         crossbeam::channel::Sender<ClientMsg>,
         crossbeam::channel::Receiver<ClientMsg>,
     ) = unbounded();
+    let (tx5, rx5): (
+        crossbeam::channel::Sender<ClientMsg>,
+        crossbeam::channel::Receiver<ClientMsg>,
+    ) = unbounded();
+    let (tx6, rx6): (
+        crossbeam::channel::Sender<ClientMsg>,
+        crossbeam::channel::Receiver<ClientMsg>,
+    ) = unbounded();
     let (tx_c, rx_c): (
         crossbeam::channel::Sender<ClientMsg>,
         crossbeam::channel::Receiver<ClientMsg>,
@@ -41,32 +49,48 @@ fn main() {
     let mut state: Arc<Mutex<Vec<RenderMsg>>> = Arc::new(Mutex::new(vec![]));
     let mut rng = rand::thread_rng();
     let random_number = rng.gen_range(0..=100_000);
-    let mut player: Entity = Entity::gen_player(random_number, 0.0, 0.0, 0.0);
+    let mut player: Arc<Mutex<Entity>> = Arc::new(Mutex::new(Entity::gen_player(random_number, 0.0, 0.0, 0.0)));
+    let player_id = player.lock().unwrap().index;
     let mut step = 0;
     let mut step_increment = 1;
     let mut camera = Camera::new();
     let mut vic_world = 0;
     let mut render = false;
     let mut current_action_type = ActionType::Empty;
+    let mut p1 = player.clone();
+    let mut p2 = player.clone();
+    let mut tx3_c = tx3.clone();
+    let mut tx_c_c = tx_c.clone();
     thread::spawn(move || loop {
-        let _ = tx3.send(ClientMsg::from(player.clone(), ActionType::Empty));
-        let _ = tx_c.send(ClientMsg::from(player.clone(), current_action_type.clone()));
+        let _ = tx3.send(ClientMsg::from(player.lock().unwrap().clone(), ActionType::Empty));
+        let _ = tx_c.send(ClientMsg::from(player.lock().unwrap().clone(), current_action_type.clone()));
         if let Ok(p) = rx4.recv() {
-            let mut player_from = p.player;
-            player = player_from;
-            current_action_type = p.action;
+	    let mut player_from = p.player;
+	    *player.lock().unwrap() = player_from;
+	    current_action_type = p.action;
         }
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     });
+    let state_clone_clone = state.clone();
+    let tx5_c = tx5.clone();
     thread::spawn(move || loop {
         // Continuously read from the channel until there are no more messages
         let mut latest_message = None;
+        let mut latest_message_server = None;
         while let Ok(p) = rx_c.try_recv() {
             latest_message = Some(p);
+            while let Ok(p) = rx6.try_recv() {
+		latest_message_server = Some(p);
+            }
         }
         // Process only the latest message, if any
         if let Some(p) = latest_message {
-            let s = ClientData { entity: p.player.clone() };
+	    let mut e = p.player.clone();
+	    match latest_message_server {
+		Some(s) => {e.ccoords = s.player.ccoords;},
+		None => {}
+	    };
+            let s = ClientData { entity: e };
             let a = ActionData {
                 entity: p.player.clone(),
                 action: p.action.clone(),
@@ -74,14 +98,34 @@ fn main() {
             match p.action {
                 ActionType::Empty => {
                     let result = task::block_on(send_client_data(s));
-                }
+		    match result {
+                        Ok(chunk) => {
+			    if let Some(chunk) = chunk {
+				chunk.entities.clone().into_iter().find(|e| {
+				    if e.index == player_id
+				    {
+					tx6.send(ClientMsg::from(e.clone(), ActionType::Refresh));
+				    }
+				    false
+				}
+				);
+                                state_clone_clone.lock().unwrap().push(RenderMsg::from(chunk.clone(), chunk.inquire_news()));
+			    }
+                        },
+                        Err(e) => eprintln!("Error fetching chunk: {}", e)
+                    };
+		}
                 ActionType::ConstructCannon => {
-                    let result = task::block_on(send_action_data(a));
+                    //let result = task::block_on(send_action_data(a));
+                }
+                ActionType::Refresh => {
+                    //let result = task::block_on(send_action_data(a));
                 }
             }
         }
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
-    });
+    }
+    );
     thread::spawn(move || {
         let mut input = String::new();
         match io::stdin().read_line(&mut input) {
@@ -113,41 +157,42 @@ fn main() {
                         if i < 0 || j < 0 || i > *WORLD_SIZE as i32 || j > *WORLD_SIZE as i32 {
                             continue;
                         }
-                        let result = task::block_on(fetch_chunk(j as f32, i as f32, 0));
-                        match result {
-                            Ok(chunk) => {
-                                let mut state = state.lock().unwrap();
-                                if let Some(index) = state
-                                    .iter()
-                                    .position(|c| c.chunk.coords.x == j && c.chunk.coords.y == i)
-                                {
-                                    let chunk_clone = chunk.clone();
-                                    for e in &chunk_clone.entities {
-                                        if e.index == p.index {
-                                            p_server_from = Some(e.clone());
-                                        }
-                                    }
-                                    if state[index].chunk.hash != chunk.hash {
-                                        state.remove(index);
-                                        state.push(RenderMsg::from(
-                                            chunk.clone(),
-                                            chunk.inquire_news(),
-                                        ));
-                                        //println!("Replaced chunk at ({}, {}) with new data.", j, i);
-                                    }
-                                } else {
-                                    state
-                                        .push(RenderMsg::from(chunk.clone(), chunk.inquire_news()));
-                                    println!("Added new chunk at ({}, {})", j, i);
-                                }
-                            }
-                            Err(e) => eprintln!("Error fetching chunk: {}", e),
-                        }
+                        // let result = task::block_on(fetch_chunk(j as f32, i as f32, 0));
+                        // match result {
+                        //     Ok(chunk) => {
+                        //         let mut state = state.lock().unwrap();
+                        //         if let Some(index) = state
+                        //             .iter()
+                        //             .position(|c| c.chunk.coords.x == j && c.chunk.coords.y == i)
+                        //         {
+                        //             let chunk_clone = chunk.clone();
+                        //             for e in &chunk_clone.entities {
+                        //                 if e.index == p.index {
+                        //                     p_server_from = Some(e.clone());
+                        //                 }
+                        //             }
+                        //             if state[index].chunk.hash != chunk.hash {
+                        //                 state.remove(index);
+                        //                 state.push(RenderMsg::from(
+                        //                     chunk.clone(),
+                        //                     chunk.inquire_news(),
+                        //                 ));
+                        //                 //println!("Replaced chunk at ({}, {}) with new data.", j, i);
+                        //             }
+                        //         } else {
+                        //             state
+                        //                 .push(RenderMsg::from(chunk.clone(), chunk.inquire_news()));
+                        //             println!("Added new chunk at ({}, {})", j, i);
+                        //         }
+                        //     }
+                        //     Err(e) => eprintln!("Error fetching chunk: {}", e),
+                        // }
+			
                     }
                 }
             }
         } else {
-            let result = task::block_on(fetch_chunk(0.0, 0.0, 0));
+            /*let result = task::block_on(fetch_chunk(0.0, 0.0, 0));
             match result {
                 Ok(chunk) => {
                     state_clone
@@ -156,7 +201,7 @@ fn main() {
                         .push(RenderMsg::from(chunk.clone(), chunk.inquire_news()));
                 }
                 Err(e) => eprintln!("Error fetching chunk: {}", e),
-            }
+            }*/
         }
         p_server_local = p_server_from.clone();
         if let Ok(x) = rx2_clone.recv() {

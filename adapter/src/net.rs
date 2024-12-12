@@ -1,1 +1,1 @@
-/home/eino/repo/games/dimensioner/client-sdl2/src/net.rs
+/home/eino/repo/dimensioner/client-sdl2/src/net.rs

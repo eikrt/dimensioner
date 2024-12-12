@@ -2,63 +2,58 @@ use crate::worldgen::{Chunk, Entity};
 use crate::util::{ActionData, ClientData};
 use reqwest::{Client, Error};
 use serde::{Deserialize, Serialize};
+use bincode;
+use tokio::net::TcpStream;
+use tokio::io::{self, AsyncWriteExt, AsyncReadExt};
+use tokio::task;
+use std::sync::Arc;
 
 
-pub async fn fetch_chunk(x: f32, y: f32, index: usize) -> Result<Chunk, Error> {
-    let url = format!(
-        "http://localhost:3000/chunk?x={}&y={}&index={}",
-        x, y, index
-    );
-    let response = reqwest::get(&url).await?;
+pub async fn send_client_data(client_data: ClientData) -> Result<Option<Chunk>, io::Error> {
+    // Serialize the ClientData to binary format
+    let serialized_data = bincode::serialize(&client_data).expect("Failed to serialize ClientData");
+    // Connect to the server
+    let stream = TcpStream::connect("127.0.0.1:3000").await?;
 
-    let chunk = response.bytes().await?;
-    let chunk_des = bincode::deserialize(&chunk).unwrap();
-    Ok(chunk_des)
-}
+    // Split the TcpStream into reader and writer
+    let (mut reader, mut writer) = tokio::io::split(stream);
 
-pub async fn send_action_data(client_data: ActionData) -> Result<(), Error> {
-    let player_data = bincode::serialize(&client_data).unwrap();
-    // Create reqwest client
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
-        .build()?;
-    // Send POST request with binary data
-    let response = client
-        .post("http://localhost:3000/action_data")
-        .header("Content-Type", "application/octet-stream")
-        .body(player_data)
-        .send()
-        .await?;
+    // Spawn a task for writing the client data
+    let write_task = task::spawn(async move {
+        writer.write_all(&serialized_data).await?;
+        writer.flush().await?;
+        Ok::<Option<Chunk>, io::Error>(None)
+    });
 
-    // Check if the request was successful
-    if response.status().is_success() {
-        //println!("Player data sent successfully!");
-    } else {
-        println!("Failed to send player data: {}", response.status());
-    }
+    // Spawn a task for reading the response
+    let read_task = task::spawn(async move {
+        let mut buffer = vec![0; 65536]; // Allocate a buffer for the incoming response
+	let mut chunk = None;
+        match reader.read(&mut buffer).await {
+            Ok(0) => {
+                eprintln!("Server closed the connection.");
+            }
+            Ok(n) => {
+                let response: Result<Chunk, _> = bincode::deserialize(&buffer[..n]);
+                match response {
+                    Ok(data) => {
+                        //println!("Received response: {:?}", data);
+			chunk = Some(data);
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to parse server response with error {}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("Error reading from server: {}", e);
+            }
+        }
+        Ok::<Option<Chunk>, io::Error>(chunk)
+    });
 
-    Ok(())
-}
-pub async fn send_client_data(client_data: ClientData) -> Result<(), Error> {
-    let player_data = bincode::serialize(&client_data).unwrap();
-    // Create reqwest client
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
-        .build()?;
-    // Send POST request with binary data
-    let response = client
-        .post("http://localhost:3000/client_data")
-        .header("Content-Type", "application/octet-stream")
-        .body(player_data)
-        .send()
-        .await?;
-
-    // Check if the request was successful
-    if response.status().is_success() {
-        //println!("Player data sent successfully!");
-    } else {
-        println!("Failed to send player data: {}", response.status());
-    }
-
-    Ok(())
+    // Await both tasks
+    let _ = write_task.await?;
+    let chunk = read_task.await?;
+    Ok(Some(chunk.unwrap().unwrap()))
 }
