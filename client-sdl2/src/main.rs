@@ -4,9 +4,10 @@ use dimensioner_client_sdl2::net::{send_client_data};
 use dimensioner_client_sdl2::plot::plot;
 use dimensioner_client_sdl2::renderer::render_server;
 use dimensioner_client_sdl2::util::{
-    ActionData, ActionType, ClientData, ClientMsg, MainMsg, RenderMsg,
+    ActionData, ActionType, ActionContent, ClientData, ClientMsg, MainMsg, RenderMsg,
 };
 use dimensioner_client_sdl2::worldgen::{worldgen, Camera, Entity, News, CHUNK_SIZE, WORLD_SIZE};
+
 use rand::Rng;
 use rayon::prelude::*;
 use std::io;
@@ -56,24 +57,26 @@ fn main() {
     let mut camera = Camera::new();
     let mut vic_world = 0;
     let mut render = false;
-    let mut current_action_type = ActionType::Empty;
+    let mut current_action_content = ActionContent::new();
     let mut p1 = player.clone();
     let mut p2 = player.clone();
     let mut tx3_c = tx3.clone();
     let mut tx_c_c = tx_c.clone();
     thread::spawn(move || loop {
-        let _ = tx3.send(ClientMsg::from(player.lock().unwrap().clone(), ActionType::Empty));
-        let _ = tx_c.send(ClientMsg::from(player.lock().unwrap().clone(), current_action_type.clone()));
+        let _ = tx3.send(ClientMsg::from(player.lock().unwrap().clone(), ActionContent::new()));
+        let _ = tx_c.send(ClientMsg::from(player.lock().unwrap().clone(), current_action_content.clone()));
         if let Ok(p) = rx4.recv() {
 	    let mut player_from = p.player;
-	    player_from.current_action = p.action.clone();
-	    current_action_type = p.action.clone();
+	    player_from.current_action = p.action.action_type.clone();
+	    current_action_content = p.action.clone();
 	    *player.lock().unwrap() = player_from;
         }
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     });
     let state_clone_clone = state.clone();
     let tx5_c = tx5.clone();
+    let mut x_i = 0;
+    let mut y_i = 0;
     thread::spawn(move || loop {
         // Continuously read from the channel until there are no more messages
         let mut latest_message = None;
@@ -87,32 +90,42 @@ fn main() {
         // Process only the latest message, if any
         if let Some(p) = latest_message {
 	    let mut e = p.player.clone();
+	    let e_i = e.index;
 	    match latest_message_server {
 		Some(s) => {e.ccoords = s.player.ccoords;},
 		None => {}
 	    };
-            let s = ClientData { entity: e };
+            let s = ClientData { entity: e, x_i: x_i, y_i: y_i};
             let a = ActionData {
                 entity: p.player.clone(),
-                action: p.action.clone(),
+                action: p.action.action_type.clone(),
             };
-                    let result = task::block_on(send_client_data(s));
-		    match result {
-                        Ok(chunk) => {
-			    if let Some(chunk) = chunk {
-				chunk.entities.clone().into_iter().find(|e| {
-				    if e.index == player_id
-				    {
-					tx6.send(ClientMsg::from(e.clone(), ActionType::Refresh));
-				    }
-				    false
-				}
-				);
-                                state_clone_clone.lock().unwrap().push(RenderMsg::from(chunk.clone(), chunk.inquire_news()));
+	    x_i += 1;
+	    if x_i > *VIEW_DISTANCE as i32 {
+		y_i += 1;
+		x_i = 0;
+	    }
+	    if y_i > *VIEW_DISTANCE as i32 {
+		x_i = 0;
+		y_i = 0;
+	    }
+            let result = task::block_on(send_client_data(s));
+	    match result {
+                Ok(chunk) => {
+		    if let Some(chunk) = chunk {
+			chunk.entities.clone().into_iter().find(|e| {
+			    if e.index == player_id
+			    {
+				tx6.send(ClientMsg::from(e.clone(), ActionContent::new()));
 			    }
-                        },
-                        Err(e) => eprintln!("Error fetching chunk: {}", e)
-                    };
+			    false
+			}
+			);
+                        state_clone_clone.lock().unwrap().push(RenderMsg::from(chunk.clone(), chunk.inquire_news()));
+		    }
+                },
+                Err(e) => eprintln!("Error fetching chunk: {}", e)
+            };
         }
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }

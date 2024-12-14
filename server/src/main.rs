@@ -54,11 +54,14 @@ async fn main() {
                     ActionType::Empty => {},
 		    ActionType::Refresh => {},
                     ActionType::ConstructCannon => {
+			let mut coords = Coords_f32::new();
+			coords.x = o.entity.coords.x / HashableF32(*TILE_SIZE as f32);
+			coords.y = o.entity.coords.y / HashableF32(*TILE_SIZE as f32);
                         let entity = Entity::from(
                             rng.gen_range(0..1000) as usize,
-                            o.entity.coords,
+                            coords,
                             (0.0, 0.0, 0.0),
-                            EntityType::Human,
+                            EntityType::Cannon,
                             Stats::gen(),
                             Alignment::from(Faction::Marine),
                             gen_human_name(Faction::Marine, &Gender::Other),
@@ -134,9 +137,15 @@ async fn handle_connection(
                 // Send back a response with the current world state
                 if let Ok(worlds) = rx.recv().await {
 		    let c = result_client_data.unwrap();
-		    println!("{}, {}", c.entity.ccoords.x, c.entity.ccoords.y);
-                    let serialized_worlds = bincode::serialize(&worlds[0].fetch_chunk_x_y(c.entity.ccoords.x as f32, c.entity.ccoords.y as f32)).unwrap();
-                    let _ = stream.write_all(&serialized_worlds).await;
+		    if c.entity.ccoords.x as f32 + c.x_i as f32 >= 0.0 && c.entity.ccoords.y as f32 + c.y_i as f32 >= 0.0 && (c.entity.ccoords.x as f32 + c.x_i as f32) < (*WORLD_SIZE as f32) && (c.entity.ccoords.y as f32 + c.y_i as f32) < (*WORLD_SIZE as f32) {
+			let serialized_worlds = bincode::serialize(&worlds[0].fetch_chunk_x_y(c.entity.ccoords.x as f32 + c.x_i as f32, c.entity.ccoords.y as f32 + c.y_i as f32)).unwrap();
+			let _ = stream.write_all(&serialized_worlds).await;
+		    }
+		    else {
+
+			let serialized_worlds = bincode::serialize(&worlds[0].fetch_chunk_x_y(0.0, 0.0)).unwrap();
+			let _ = stream.write_all(&serialized_worlds).await;
+		    }
                 }
             }
             Err(e) => {

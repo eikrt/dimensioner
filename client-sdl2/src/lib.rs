@@ -6,3 +6,4 @@ pub mod renderer;
 pub mod util;
 pub mod worldgen;
 pub mod net;
+pub mod ui;

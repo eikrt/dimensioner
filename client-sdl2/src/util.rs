@@ -1,4 +1,4 @@
-use crate::worldgen::{Camera, Entity, Chunk, News};
+use crate::worldgen::{Camera, Entity, Chunk, News, HashableF32};
 use serde::{Serialize, Deserialize};
 
 #[derive(Clone, Debug)]
@@ -33,10 +33,10 @@ impl MainMsg {
 #[derive(Clone, Debug)]
 pub struct ClientMsg {
     pub player: Entity,
-    pub action: ActionType,
+    pub action: ActionContent,
 }
 impl ClientMsg{
-    pub fn from(player: Entity, action: ActionType) -> ClientMsg{
+    pub fn from(player: Entity, action: ActionContent) -> ClientMsg{
         ClientMsg {
             player: player,
 	    action: action,
@@ -47,6 +47,8 @@ impl ClientMsg{
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ClientData {
     pub entity: Entity,
+    pub x_i: i32,
+    pub y_i: i32,
 }
 
 #[derive(Hash, Clone, Serialize, Deserialize, Debug, PartialEq)]
@@ -56,6 +58,25 @@ pub enum ActionType {
     ConstructCannon,
 }
 
+#[derive(Hash, Clone, Serialize, Deserialize, Debug, PartialEq)]
+pub struct ActionContent {
+    pub action_type: ActionType,
+    pub ang: HashableF32
+}
+impl ActionContent {
+    pub fn new() -> ActionContent {
+	ActionContent {
+	    action_type: ActionType::Empty,
+	    ang: HashableF32(0.0)
+	}
+    }
+    pub fn from(action_type: ActionType, ang: HashableF32) -> ActionContent {
+	ActionContent {
+	    action_type: action_type,
+	    ang: ang
+	}
+    }
+}
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ActionData {
     pub action: ActionType,

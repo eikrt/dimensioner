@@ -9,11 +9,11 @@ use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
 use sha2::{Sha256, Digest};
 use std::hash::{Hash, Hasher};
-use std::ops::{Add, Sub, Div, AddAssign, SubAssign};
+use std::ops::{Add, Sub, Div, AddAssign, SubAssign, Mul};
 lazy_static! {
     pub static ref WORLD_SIZE: u32 = 4;
     pub static ref CHUNK_SIZE: u32 = 16;
-    pub static ref TILE_SIZE: u32 = 1;
+    pub static ref TILE_SIZE: u32 = 16;
     pub static ref NOISE_SCALE: f64 = 64.0;
     pub static ref VICINITY_DIST: i32 = 4;
     pub static ref HUMAN_NAMES_F: Vec<String> = vec![
@@ -84,6 +84,13 @@ impl Div for HashableF32 {
     }
 }
 
+impl Mul for HashableF32 {
+    type Output = Self;
+
+    fn mul(self, other: Self) -> Self {
+        HashableF32(self.0 * other.0)
+    }
+}
 // Implement other necessary traits for convenience
 impl PartialEq for HashableF32{
     fn eq(&self, other: &Self) -> bool {
@@ -285,6 +292,12 @@ pub enum TileType {
 #[derive(Clone, Serialize, Deserialize, Debug, Hash)]
 pub enum EntityType {
     Human,
+    Cannon,
+    Cauliflower,
+    Lily,
+    Tulip,
+    Stone,
+    Shell,
 }
 #[derive(Clone, Serialize, Deserialize, Debug, Hash)]
 pub struct Coords_i32 {
@@ -400,7 +413,7 @@ impl Entity {
             alignment: Alignment::new(),
             inventory: Inventory::new(),
             index: id,
-            name: "".to_string(),
+            name: "Player".to_string(),
             gender: Gender::Female,
             tasks: Tasks::new(),
 	    current_world: 0,
@@ -434,6 +447,9 @@ impl Entity {
             tasks: Tasks::new(),
 	    current_world: current_world
         }
+    }
+    pub fn get_sheet(&mut self) -> String {
+	return format!("{}\n{:?}", self.name, self.etype).to_string();
     }
     pub fn resolve(&mut self, step_increment: i32) {
         // movement
@@ -498,6 +514,9 @@ impl Tile {
             holds,
             designed: None,
         }
+    }
+    pub fn get_sheet(&mut self) -> String {
+	return format!("{:?}", self.ttype).to_string();
     }
     pub fn as_bytes(&self) -> Result<Vec<u8>, bincode::Error> {
 	bincode::serialize(self)
@@ -631,6 +650,58 @@ impl Chunk {
 		    0,
                 ))
             }
+            if height > 0 && !discard_entities && rng.gen_range(0..16) == 1 {
+                entities.push(Entity::from(
+                    c as usize,
+                    Coords_f32::from((x as f32, y as f32, height as f32)),
+                    (0.0, 0.0, 0.0),
+                    EntityType::Cauliflower,
+                    Stats::gen(),
+                    Alignment::from(faction.clone()),
+		    "Cauliflower".to_string(),
+                    gender.clone(),
+		    0,
+                ))
+            }
+            if height > 0 && !discard_entities && rng.gen_range(0..16) == 1 {
+                entities.push(Entity::from(
+                    c as usize,
+                    Coords_f32::from((x as f32, y as f32, height as f32)),
+                    (0.0, 0.0, 0.0),
+                    EntityType::Lily,
+                    Stats::gen(),
+                    Alignment::from(faction.clone()),
+		    "Lily".to_string(),
+                    gender.clone(),
+		    0,
+                ))
+            }
+            if height > 0 && !discard_entities && rng.gen_range(0..16) == 1 {
+                entities.push(Entity::from(
+                    c as usize,
+                    Coords_f32::from((x as f32, y as f32, height as f32)),
+                    (0.0, 0.0, 0.0),
+                    EntityType::Stone,
+                    Stats::gen(),
+                    Alignment::from(faction.clone()),
+		    "Stone".to_string(),
+                    gender.clone(),
+		    0,
+                ))
+            }
+            if height > 0 && !discard_entities && rng.gen_range(0..16) == 1 {
+                entities.push(Entity::from(
+                    c as usize,
+                    Coords_f32::from((x as f32, y as f32, height as f32)),
+                    (0.0, 0.0, 0.0),
+                    EntityType::Tulip,
+                    Stats::gen(),
+                    Alignment::from(faction.clone()),
+		    "Tulip".to_string(),
+                    gender.clone(),
+		    0,
+                ))
+            }
             tiles.push(Tile::from(
                 Coords_i32::from((x, y, height as i32)),
                 c as usize,
@@ -697,6 +768,9 @@ impl World {
     pub fn update_chunk_with_entity(&mut self, mut entity: Entity) {
         let x_int = entity.ccoords.x as i32;
         let y_int = entity.ccoords.y as i32;
+	if x_int < 0 || y_int < 0 || x_int > *WORLD_SIZE as i32 || y_int > *WORLD_SIZE as i32 {
+	    return
+	}
 	entity.ccoords.x = (entity.coords.x / HashableF32(*CHUNK_SIZE as f32)).as_i32();
 	entity.ccoords.y = (entity.coords.y / HashableF32(*CHUNK_SIZE as f32)).as_i32();
         let chunk = &mut self.chunks[(y_int * *WORLD_SIZE as i32 + x_int) as usize];

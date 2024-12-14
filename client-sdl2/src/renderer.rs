@@ -1,16 +1,19 @@
 use crate::bitmap::*;
-use crate::util::{ActionType, ClientMsg, MainMsg, RenderMsg};
+use crate::util::{ActionType, ActionContent, ClientMsg, MainMsg, RenderMsg};
 use crate::worldgen::{
     Camera, Chunk, Coords_f32, Coords_i32, Entity, Faction, HashableF32, Tile, CHUNK_SIZE,
-    TILE_SIZE,
+    TILE_SIZE, EntityType
 };
+use crate::ui::*;
 use lazy_static::lazy_static;
 use sdl2::event::{Event, WindowEvent};
+use sdl2::mouse::{MouseButton};
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::{Canvas, Texture, TextureCreator};
 use sdl2::video::{Window, WindowContext};
+use sdl2::image::{self, LoadTexture};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
@@ -24,6 +27,7 @@ lazy_static! {
 }
 struct InputBuffer {
     ang: f32,
+    cannon_ang: f32,
     forward: bool,
     c_pressed: bool
 }
@@ -31,7 +35,16 @@ struct InputBuffer {
 struct TileCache<'a> {
     textures: HashMap<u64, Texture<'a>>, // Assuming u32 as tile type identifier
 }
-
+struct TextureCache<'a> {
+    textures: HashMap<u64, Texture<'a>>,
+}
+impl <'a> TextureCache<'a> {
+    fn new() -> Self {
+        TextureCache {
+            textures: HashMap::new(),
+        }
+    }
+}
 impl<'a> TileCache<'a> {
     fn new() -> Self {
         TileCache {
@@ -45,6 +58,7 @@ impl<'a> TileCache<'a> {
         chunk: &Chunk,
         canvas: &mut Canvas<Window>,
         texture_creator: &'a TextureCreator<WindowContext>,
+        tex_cache: &TextureCache 
     ) -> &Texture<'a> {
         // Use the chunk index or a unique identifier as the key for caching
         let chunk_id = chunk.hash; // Assuming `Chunk` has a unique ID field
@@ -63,6 +77,9 @@ impl<'a> TileCache<'a> {
                     for tile in &chunk.tiles {
                         let x = (i % *CHUNK_SIZE) as i32;
                         let y = (i / *CHUNK_SIZE) as i32;
+			let texture_creator = tex_canvas.texture_creator();
+			
+			let texture = tex_cache.textures.get(&0).unwrap();
                         // Define the color based on tile.z or other properties
                         let mut color = (
                             (255.0 - (tile.coords.z as f32 / 0.0) as f32 * 255.0) as u8,
@@ -72,7 +89,7 @@ impl<'a> TileCache<'a> {
                         if tile.coords.z < 0 {
                             color = (0, 0, 255); // Example for specific z-coordinates
                         }
-                        tex_canvas.set_draw_color(Color::RGB(color.0, color.1, color.2));
+                        tex_canvas.set_draw_color(Color::RGBA(color.0, color.1, color.2, 100));
                         // Calculate position on the chunk texture
                         let dest_rect = Rect::new(
                             x * *TILE_SIZE as i32,
@@ -80,6 +97,8 @@ impl<'a> TileCache<'a> {
                             *TILE_SIZE,
                             *TILE_SIZE,
                         );
+			let src_rect = Rect::new(0, 0, 16, 16);
+			tex_canvas.copy(&texture, src_rect, dest_rect).unwrap();
                         let _ = tex_canvas.fill_rect(dest_rect);
                         i += 1;
                     }
@@ -95,9 +114,10 @@ fn render_world<'a>(
     camera: &Camera,
     chunk: &Chunk,
     tile_cache: &mut TileCache<'a>,
+    tex_cache: &TextureCache<'a>,
     texture_creator: &'a TextureCreator<WindowContext>,
 ) {
-    let chunk_texture = tile_cache.get_or_create_texture(camera, chunk, canvas, texture_creator);
+    let chunk_texture = tile_cache.get_or_create_texture(camera, chunk, canvas, texture_creator, tex_cache);
 
     // Set the destination position for the chunk based on camera position
     let dest_x = chunk.coords.x * *TILE_SIZE as i32 * *CHUNK_SIZE as i32 * camera.zoom
@@ -133,7 +153,7 @@ pub fn render_server(
     let mut camera = Camera::new();
     let ttf_context = sdl2::ttf::init().unwrap();
     let font_path = "fonts/VastShadow-Regular.ttf";
-    let _font = ttf_context.load_font(font_path, 48).unwrap();
+    let font = ttf_context.load_font(font_path, 14).unwrap();
     let mut canvas = window
         .into_canvas()
         .present_vsync()
@@ -142,6 +162,7 @@ pub fn render_server(
         .unwrap();
     let texture_creator = canvas.texture_creator();
     let mut tile_cache = TileCache::new();
+    let mut tex_cache = TextureCache::new();
     canvas.set_blend_mode(sdl2::render::BlendMode::Blend);
     let _texture_creator = canvas.texture_creator();
     let mut event_pump = sdl_context.event_pump().unwrap();
@@ -150,6 +171,7 @@ pub fn render_server(
     let mut trigger_refresh = false;
     let mut input_buffer: InputBuffer = InputBuffer {
         ang: 0.0,
+	cannon_ang: 0.0,
         forward: false,
 	c_pressed: false,
     };
@@ -157,7 +179,20 @@ pub fn render_server(
     let mut r: Option<Vec<RenderMsg>> = None;
     let mut current_chunks: Vec<Chunk> = vec![];
     let mut player: Option<Entity> = None;
+    let mut ui_state_entities: HashMap<i32, Entity> = HashMap::new();
+    let mut ui_state_tiles: HashMap<i32, Tile> = HashMap::new();
+    tex_cache.textures.insert(0, texture_creator.load_texture("res/tiles/grass.png").unwrap());
+    tex_cache.textures.insert(1, texture_creator.load_texture("res/characters/human.png").unwrap());
+    tex_cache.textures.insert(2, texture_creator.load_texture("res/characters/cannon.png").unwrap());
+    tex_cache.textures.insert(3, texture_creator.load_texture("res/misc/cauliflower.png").unwrap());
+    tex_cache.textures.insert(4, texture_creator.load_texture("res/misc/lily.png").unwrap());
+    tex_cache.textures.insert(5, texture_creator.load_texture("res/misc/tulip.png").unwrap());
+    tex_cache.textures.insert(6, texture_creator.load_texture("res/misc/stone.png").unwrap());
+    tex_cache.textures.insert(7, texture_creator.load_texture("res/characters/shell.png").unwrap());
     'main: loop {
+	let mouse_util = event_pump.mouse_state();
+	let (m_x, m_y) = (mouse_util.x(), mouse_util.y());
+	let (m_x_scaled, m_y_scaled) = ( mouse_util.x() / camera.zoom / *TILE_SIZE as i32 ,  mouse_util.y() / camera.zoom / *TILE_SIZE as i32 );
         let now = Instant::now();
         let delta_time = now.duration_since(last_frame_time);
         let delta_seconds = delta_time.as_secs_f32();
@@ -227,6 +262,13 @@ pub fn render_server(
                         Keycode::C => {
 			    input_buffer.c_pressed = true;
                         }
+                        Keycode::X => {
+			    ui_state_entities.clear();
+			    ui_state_tiles.clear();
+                        }
+                        Keycode::Plus => {
+			    input_buffer.cannon_ang += 0.1;
+                        }
                         _ => {}
                     }
                     trigger_refresh = true;
@@ -235,7 +277,7 @@ pub fn render_server(
                 Event::KeyUp {
                     keycode: Some(key), ..
                 } => {
-                    if matches!(key, Keycode::W | Keycode::A | Keycode::S | Keycode::D) {
+                    if matches!(key, Keycode::W | Keycode::A | Keycode::S | Keycode::D | Keycode::Plus) {
                         pressed_keys.remove(&key);
                     }
                     if pressed_keys.is_empty() {
@@ -293,6 +335,7 @@ pub fn render_server(
             {
                 continue;
             }
+	    
             if factions {
                 let counts: HashMap<Faction, usize> =
                     chunk
@@ -335,8 +378,10 @@ pub fn render_server(
                 &camera,
                 &chunk,
                 &mut tile_cache,
+		&tex_cache,
                 &texture_creator,
             );
+
             for m in &chunk.entities {
                 if let Some(ref player) = player {
                     if m.index == player.index {
@@ -348,31 +393,60 @@ pub fn render_server(
                 color.1 = 0;
                 color.2 = 0;
                 canvas.set_draw_color(Color::RGB(color.0, color.1, color.2));
-                let _ = canvas.fill_rect(Rect::new(
-                    m.coords.x.as_i32() * *TILE_SIZE as i32 * camera.zoom
-                        + camera.coords.x.as_i32(),
-                    m.coords.y.as_i32() * *TILE_SIZE as i32 * camera.zoom
-                        + camera.coords.y.as_i32(),
+
+                let dest_rect = Rect::new(
+                    (m.coords.x.as_i32() * *TILE_SIZE as i32) * camera.zoom + camera.coords.x.as_i32(),
+                    (m.coords.y.as_i32() * *TILE_SIZE as i32) * camera.zoom + camera.coords.y.as_i32(),
                     *TILE_SIZE * camera.zoom as u32,
                     *TILE_SIZE * camera.zoom as u32,
-                ));
+                );
+		let src_rect = Rect::new(0, 0, 16, 16);
+		let mut i = 0;
+		match m.etype {
+		    EntityType::Human => {i = 1},
+		    EntityType::Cannon => {i = 2},
+		    EntityType::Cauliflower => {i = 3},
+		    EntityType::Lily => {i = 4},
+		    EntityType::Tulip => {i = 5},
+		    EntityType::Stone => {i = 6},
+		    EntityType::Shell => {i = 7},
+		};
+		canvas.copy(&tex_cache.textures.get(&i).unwrap(), src_rect, dest_rect).unwrap();
+		if m_x_scaled == (m.coords.x).as_i32() && m_y_scaled == (m.coords.y).as_i32() {
+		      if mouse_util.is_mouse_button_pressed(MouseButton::Left) {
+			  if !ui_state_entities.contains_key(&(m.index as i32)) {
+			      ui_state_entities.insert((m.index as i32), m.clone());
+			  }
+			  
+		      }
+		} 
             }
+	    for e in &chunk.tiles {
+		if m_x_scaled == (e.coords.x) && m_y_scaled == e.coords.y {
+		      if mouse_util.is_mouse_button_pressed(MouseButton::Left) {
+			  if !ui_state_tiles.contains_key(&(e.index as i32)) {
+			      ui_state_tiles.insert((e.index as i32), e.clone());
+			  }
+			  
+		      }
+		}
+	    }
             if let Ok(rm) = rx_client.try_recv() {
                 let mut m = rm.player.clone();
                 player = Some(m.clone());
                 m.ang = HashableF32(input_buffer.ang);
                 if input_buffer.forward {
-                    m.vel.x = HashableF32(input_buffer.ang.sin() * 1.0);
-                    m.vel.y = HashableF32(-input_buffer.ang.cos() * 1.0);
+                    m.vel.x = HashableF32(input_buffer.ang.sin() * 1.0) * HashableF32(16.0);
+                    m.vel.y = HashableF32(-input_buffer.ang.cos() * 1.0) * HashableF32(16.0);
                     m.coords.x += HashableF32(m.vel.x.0 * delta_seconds);
                     m.coords.y += HashableF32(m.vel.y.0 * delta_seconds);
                 }
 		if input_buffer.c_pressed {
-                    let _ = sx_client.send(ClientMsg::from(m.clone(), ActionType::ConstructCannon));
+                    let _ = sx_client.send(ClientMsg::from(m.clone(), ActionContent::from(ActionType::ConstructCannon, HashableF32(input_buffer.ang))));
 		    input_buffer.c_pressed = false;
 		}
 		else {
-                    let _ = sx_client.send(ClientMsg::from(m.clone(), ActionType::Empty));
+                    let _ = sx_client.send(ClientMsg::from(m.clone(), ActionContent::new()));
 		}
             }
             if let Some(mut m) = player.clone() {
@@ -381,18 +455,49 @@ pub fn render_server(
                 color.1 = 0;
                 color.2 = 0;
                 canvas.set_draw_color(Color::RGB(color.0, color.1, color.2));
-                let _ = canvas.fill_rect(Rect::new(
-                    m.coords.x.as_i32() * *TILE_SIZE as i32 * camera.zoom
-                        + camera.coords.x.as_i32(),
-                    m.coords.y.as_i32() * *TILE_SIZE as i32 * camera.zoom
-                        + camera.coords.y.as_i32(),
+                let dest_rect = Rect::new(
+                    m.coords.x.as_i32() * 1 as i32 * camera.zoom + camera.coords.x.as_i32(),
+                    m.coords.y.as_i32() * 1 as i32 * camera.zoom + camera.coords.y.as_i32(),
                     *TILE_SIZE * camera.zoom as u32,
                     *TILE_SIZE * camera.zoom as u32,
-                ));
+                );
+		let src_rect = Rect::new(0, 0, 16, 16);
+		canvas.copy(&tex_cache.textures.get(&1).unwrap(), src_rect, dest_rect).unwrap();
             }
         }
 
-        canvas.present();
+	canvas.set_draw_color(Color::RGBA(255,255,255,100));
+	canvas.fill_rect(Rect::new((m_x / *TILE_SIZE as i32 / camera.zoom) * *TILE_SIZE as i32 * camera.zoom, (m_y / *TILE_SIZE as i32 / camera.zoom) * *TILE_SIZE as i32 * camera.zoom, *TILE_SIZE * camera.zoom as u32, *TILE_SIZE * camera.zoom as u32)).unwrap();
+	
+	for (k,mut v) in &mut ui_state_tiles {
+	    let text = &v.get_sheet();
+	    let color = Color::RGB(0, 0, 0); // White
+	    draw_text(
+		&mut canvas,
+		(m_x_scaled, m_y_scaled),
+		&font,
+		text,
+		color,
+		"ui/CharacterBox.toml",
+		100,
+		100,
+	    ).unwrap();
+	}
+	for (k,mut v) in &mut ui_state_entities {
+	    let text = &v.get_sheet();
+	    let color = Color::RGB(0, 0, 0); // White
+	    draw_text(
+		&mut canvas,
+		(m_x_scaled, m_y_scaled),
+		&font,
+		text,
+		color,
+		"ui/CharacterBox.toml",
+		100 + 512,
+		100,
+	    ).unwrap();
+	}
+	canvas.present();
         canvas.set_draw_color(Color::RGB(0, 0, 0));
         canvas.clear();
         let _ = sx.send(MainMsg::from(camera.clone(), player.clone(), true));
