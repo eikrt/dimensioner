@@ -131,7 +131,8 @@ pub struct Camera {
     pub ccoords: Coords_i32,
     pub render_distance_w: i32,
     pub render_distance_h: i32,
-    pub zoom: f32,
+    pub scale_x: f32,
+    pub scale_y: f32,
 }
 impl Camera {
     pub fn new() -> Camera {
@@ -140,7 +141,8 @@ impl Camera {
             ccoords: Coords_i32::new(),
             render_distance_w: 128 as i32,
             render_distance_h: 128 as i32,
-            zoom: 1.0,
+	    scale_x: 1.0,
+	    scale_y: 1.0,
         }
     }
     pub fn tick(&mut self) {
@@ -413,6 +415,7 @@ impl Entity {
     pub fn gen_player(id: usize, x:f32, y:f32, z: f32) -> Entity {
         Entity {
             coords: Coords_f32::from((x,y,z)),
+           // coords: Coords_f32::from((0.0,0.0,0.0)),
             ccoords: Coords_i32::from(((HashableF32(x) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32)).as_i32() , (HashableF32(y) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32)).as_i32(), (HashableF32(z) / HashableF32(*CHUNK_SIZE as f32)).as_i32())),
 	    current_action: ActionType::Empty,
             vel: Coords_f32::new(),

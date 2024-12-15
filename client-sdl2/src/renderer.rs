@@ -4,6 +4,7 @@ use crate::worldgen::{
     Camera, Chunk, Coords_f32, Coords_i32, Entity, Faction, HashableF32, Tile, WORLD_SIZE, CHUNK_SIZE,
     TILE_SIZE, EntityType
 };
+use crate::math::{lerp};
 use crate::ui::*;
 use lazy_static::lazy_static;
 use sdl2::event::{Event, WindowEvent};
@@ -12,7 +13,7 @@ use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::{Canvas, Texture, TextureCreator};
-use sdl2::video::{Window, WindowContext};
+use sdl2::video::{Window, WindowContext, DisplayMode};
 use sdl2::image::{self, LoadTexture};
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -20,8 +21,8 @@ use std::time::{Duration, Instant};
 use std::f64::consts::PI;
 use crossbeam::channel::unbounded;
 lazy_static! {
-    pub static ref WINDOW_WIDTH: u32 = 1240;
-    pub static ref WINDOW_HEIGHT: u32 = 760;
+    pub static ref WINDOW_WIDTH: u32 = 640;
+    pub static ref WINDOW_HEIGHT: u32 = 360;
     pub static ref DEFAULT_ZOOM: i32 = 1;
     pub static ref CAMERA_STEP: HashableF32 = HashableF32(32.0);
 }
@@ -131,15 +132,15 @@ fn render_world<'a>(
     let chunk_texture = tile_cache.get_or_create_texture(camera, chunk, canvas, texture_creator, tex_cache);
 
     // Set the destination position for the chunk based on camera position
-    let dest_x = chunk.coords.x * *TILE_SIZE as i32 * *CHUNK_SIZE as i32 * camera.zoom as i32
+    let dest_x = chunk.coords.x * *TILE_SIZE as i32 * *CHUNK_SIZE as i32 * camera.scale_x as i32
         + camera.coords.x.as_i32();
-    let dest_y = chunk.coords.y * *TILE_SIZE as i32 * *CHUNK_SIZE as i32 * camera.zoom as i32
+    let dest_y = chunk.coords.y * *TILE_SIZE as i32 * *CHUNK_SIZE as i32 * camera.scale_y as i32
         + camera.coords.y.as_i32();
     let dest_rect = Rect::new(
         dest_x,
         dest_y,
-        *CHUNK_SIZE * *TILE_SIZE * camera.zoom as u32,
-        *CHUNK_SIZE * *TILE_SIZE * camera.zoom as u32,
+        *CHUNK_SIZE * *TILE_SIZE * camera.scale_x as u32,
+        *CHUNK_SIZE * *TILE_SIZE * camera.scale_y as u32,
     );
 
     // Render the cached chunk texture
@@ -158,10 +159,17 @@ pub fn render_server(
     let window = video_subsystem
         .window("Dimensioner", *WINDOW_WIDTH, *WINDOW_HEIGHT)
         .position_centered()
-        // .fullscreen_desktop()
+        .fullscreen_desktop()
         .build()
         .unwrap();
+    let display_index = 0; // Primary display is typically index 0
+    let display_mode: DisplayMode = video_subsystem.desktop_display_mode(display_index).unwrap();
+
     let mut camera = Camera::new();
+    camera.scale_x = (display_mode.w as u32 / *WINDOW_WIDTH) as f32;
+    camera.scale_y = (display_mode.h as u32 / *WINDOW_HEIGHT) as f32;
+    camera.coords.x = HashableF32((*TILE_SIZE * *CHUNK_SIZE * *WORLD_SIZE / 2) as f32 * -1.0);
+    camera.coords.y = HashableF32((*TILE_SIZE * *CHUNK_SIZE * *WORLD_SIZE / 2) as f32 * -1.0);
     let ttf_context = sdl2::ttf::init().unwrap();
     let font_path = "fonts/VastShadow-Regular.ttf";
     let font = ttf_context.load_font(font_path, 14).unwrap();
@@ -205,9 +213,10 @@ pub fn render_server(
     tex_cache.textures.insert(8, texture_creator.load_texture("res/effects/explosion.png").unwrap());
     tex_cache.textures.insert(9, texture_creator.load_texture("res/buildings/crossroad.png").unwrap());
     'main: loop {
+	
 	let mouse_util = event_pump.mouse_state();
 	let (m_x, m_y) = (mouse_util.x(), mouse_util.y());
-	let (m_x_scaled, m_y_scaled) = ( mouse_util.x() / camera.zoom as i32 / *TILE_SIZE as i32, mouse_util.y() / camera.zoom as i32 / *TILE_SIZE as i32 );
+	let (m_x_scaled, m_y_scaled) = ( mouse_util.x() / camera.scale_x as i32 / *TILE_SIZE as i32, mouse_util.y() / camera.scale_y as i32 / *TILE_SIZE as i32 );
         let now = Instant::now();
         let delta_time = now.duration_since(last_frame_time);
         let delta_seconds = delta_time.as_secs_f32();
@@ -245,7 +254,8 @@ pub fn render_server(
                     keycode: Some(Keycode::Plus),
                     ..
                 } => {
-                    camera.zoom += 1.0;
+                    camera.scale_x += 0.21;
+                    camera.scale_y += 0.21;
                     tile_cache.textures.clear();
                 }
 
@@ -253,7 +263,8 @@ pub fn render_server(
                     keycode: Some(Keycode::Minus),
                     ..
                 } => {
-                    camera.zoom -= 1.0;
+                    camera.scale_x -= 0.21;
+                    camera.scale_y -= 0.21;
                     tile_cache.textures.clear();
                 }
 
@@ -351,14 +362,14 @@ pub fn render_server(
         }
 
         for chunk in &current_chunks {
-            if chunk.coords.x * (camera.zoom as i32) < (camera.ccoords.x) as i32 * camera.zoom as i32
-                || chunk.coords.y * (camera.zoom as i32) < (camera.ccoords.y) as i32 * camera.zoom as i32
-                || chunk.coords.x * camera.zoom as i32
+            if chunk.coords.x * (camera.scale_x as i32) < (camera.ccoords.x) as i32 * camera.scale_x as i32
+                || chunk.coords.y * (camera.scale_x as i32) < (camera.ccoords.y) as i32 * camera.scale_y as i32
+                || chunk.coords.x * camera.scale_x as i32
                     > (camera.ccoords.x as i32 + *WINDOW_WIDTH as i32 * *CHUNK_SIZE as i32)
-                        * camera.zoom as i32
-                || chunk.coords.y * camera.zoom as i32
+                        * camera.scale_x as i32
+                || chunk.coords.y * camera.scale_y as i32
                     > (camera.ccoords.y as i32 + *WINDOW_HEIGHT as i32 * *CHUNK_SIZE as i32)
-                        * camera.zoom as i32
+                        * camera.scale_y as i32
             {
                 continue;
             }
@@ -394,10 +405,10 @@ pub fn render_server(
                     }
                 };
                 let _ = canvas.fill_rect(Rect::new(
-                    chunk.coords.x * *CHUNK_SIZE as i32 * camera.zoom as i32 + camera.coords.x.as_i32(),
-                    chunk.coords.y * *CHUNK_SIZE as i32 * camera.zoom as i32 + camera.coords.y.as_i32(),
-                    *CHUNK_SIZE * *TILE_SIZE * camera.zoom as u32,
-                    *CHUNK_SIZE * *TILE_SIZE * camera.zoom as u32,
+                    chunk.coords.x * *CHUNK_SIZE as i32 * camera.scale_x as i32 + camera.coords.x.as_i32(),
+                    chunk.coords.y * *CHUNK_SIZE as i32 * camera.scale_y as i32 + camera.coords.y.as_i32(),
+                    *CHUNK_SIZE * *TILE_SIZE * camera.scale_x as u32,
+                    *CHUNK_SIZE * *TILE_SIZE * camera.scale_y as u32,
                 ));
             }
             render_world(
@@ -421,10 +432,10 @@ pub fn render_server(
                 canvas.set_draw_color(Color::RGB(color.0, color.1, color.2));
 
                 let dest_rect = Rect::new(
-                    (m.coords.x.as_i32()) * camera.zoom as i32 + camera.coords.x.as_i32(),
-                    (m.coords.y.as_i32() - m.coords.z.as_i32()) * camera.zoom as i32 + camera.coords.y.as_i32(),
-                    *TILE_SIZE * camera.zoom as u32,
-                    *TILE_SIZE * camera.zoom as u32,
+                    (m.coords.x.as_i32()) * camera.scale_y as i32 + camera.coords.x.as_i32(),
+                    (m.coords.y.as_i32() - m.coords.z.as_i32()) * camera.scale_y as i32 + camera.coords.y.as_i32(),
+                    *TILE_SIZE * camera.scale_x as u32,
+                    *TILE_SIZE * camera.scale_y as u32,
                 );
 		let src_rect = Rect::new(0, 0, *TILE_SIZE as u32, *TILE_SIZE as u32);
 		let mut i = 0;
@@ -439,7 +450,7 @@ pub fn render_server(
 		    EntityType::Explosion => {i = 8},
 		    EntityType::Road => {i = 9},
 		};
-		draw_filled_circle(&mut canvas, (m.coords.x.as_f32() + 8.0) * camera.zoom as f32 + camera.coords.x.as_f32(), (16.0 + m.coords.y.as_f32())  * camera.zoom as f32 + camera.coords.y.as_f32(), 8 * camera.zoom as i32, Color::RGBA(0, 0, 0, 70));
+		//draw_filled_circle(&mut canvas, (m.coords.x.as_f32() + 8.0) * camera.scale_x as f32 + camera.coords.x.as_f32(), (14.0 + m.coords.y.as_f32()) * camera.scale_y as f32 + camera.coords.y.as_f32(), 8 * camera.scale_x as i32, Color::RGBA(0, 0, 0, 70));
 		canvas.copy(&tex_cache.textures.get(&i).unwrap(), src_rect, dest_rect).unwrap();
 		if m_x_scaled == (m.coords.x).as_i32() && m_y_scaled == (m.coords.y).as_i32() {
 		      if mouse_util.is_mouse_button_pressed(MouseButton::Left) {
@@ -462,6 +473,7 @@ pub fn render_server(
 	    }
             if let Ok(rm) = rx_client.try_recv() {
                 let mut m = rm.player.clone();
+
                 player = Some(m.clone());
                 m.ang = HashableF32(input_buffer.ang);
                 if input_buffer.forward {
@@ -483,16 +495,17 @@ pub fn render_server(
 		}
             }
             if let Some(mut m) = player.clone() {
+
                 let mut color = ((0) as u8, 255 as u8, 0);
                 color.0 = 255;
                 color.1 = 0;
                 color.2 = 0;
                 canvas.set_draw_color(Color::RGB(color.0, color.1, color.2));
                 let dest_rect = Rect::new(
-                    m.coords.x.as_i32() * 1 as i32 * camera.zoom as i32 + camera.coords.x.as_i32(),
-                    m.coords.y.as_i32() * 1 as i32 * camera.zoom as i32 + camera.coords.y.as_i32(),
-                    *TILE_SIZE * camera.zoom as u32,
-                    *TILE_SIZE * camera.zoom as u32,
+                    m.coords.x.as_i32() * 1 as i32 * camera.scale_x as i32 + camera.coords.x.as_i32(),
+                    m.coords.y.as_i32() * 1 as i32 * camera.scale_y as i32 + camera.coords.y.as_i32(),
+                    *TILE_SIZE * camera.scale_x as u32,
+                    *TILE_SIZE * camera.scale_y as u32,
                 );
 		let src_rect = Rect::new(0, 0, 16, 16);
 		canvas.copy(&tex_cache.textures.get(&1).unwrap(), src_rect, dest_rect).unwrap();
@@ -500,7 +513,7 @@ pub fn render_server(
         }
 
 	canvas.set_draw_color(Color::RGBA(255,255,255,100));
-	canvas.fill_rect(Rect::new((m_x / *TILE_SIZE as i32 / camera.zoom as i32) * *TILE_SIZE as i32 * camera.zoom as i32, (m_y / *TILE_SIZE as i32 / camera.zoom as i32) * *TILE_SIZE as i32 * camera.zoom as i32, *TILE_SIZE * camera.zoom as u32, *TILE_SIZE * camera.zoom as u32)).unwrap();
+	canvas.fill_rect(Rect::new((m_x / *TILE_SIZE as i32 / camera.scale_x as i32) * *TILE_SIZE as i32 * camera.scale_x as i32, (m_y / *TILE_SIZE as i32 / camera.scale_y as i32) * *TILE_SIZE as i32 * camera.scale_y as i32, *TILE_SIZE * camera.scale_x as u32, *TILE_SIZE * camera.scale_y as u32)).unwrap();
 	
 	for (k,mut v) in &mut ui_state_tiles {
 	    let text = &v.get_sheet();

@@ -48,8 +48,6 @@ impl ClientMsg{
 pub struct ClientData {
     pub entity: Entity,
     pub action: ActionContent,
-    pub x_i: i32,
-    pub y_i: i32,
 }
 
 #[derive(Hash, Clone, Serialize, Deserialize, Debug, PartialEq)]

@@ -6,7 +6,7 @@ use dimensioner_client_sdl2::renderer::render_server;
 use dimensioner_client_sdl2::util::{
     ActionData, ActionType, ActionContent, ClientData, ClientMsg, MainMsg, RenderMsg,
 };
-use dimensioner_client_sdl2::worldgen::{worldgen, Camera, Entity, News, CHUNK_SIZE, WORLD_SIZE};
+use dimensioner_client_sdl2::worldgen::{worldgen, Camera, Entity, News, CHUNK_SIZE, WORLD_SIZE, TILE_SIZE};
 
 use rand::Rng;
 use rayon::prelude::*;
@@ -50,7 +50,7 @@ fn main() {
     let mut state: Arc<Mutex<Vec<RenderMsg>>> = Arc::new(Mutex::new(vec![]));
     let mut rng = rand::thread_rng();
     let random_number = rng.gen_range(0..=100_000);
-    let mut player: Arc<Mutex<Entity>> = Arc::new(Mutex::new(Entity::gen_player(random_number, 0.0, 0.0, 0.0)));
+    let mut player: Arc<Mutex<Entity>> = Arc::new(Mutex::new(Entity::gen_player(random_number, (*TILE_SIZE * *CHUNK_SIZE * *WORLD_SIZE / 2) as f32, (*TILE_SIZE * *CHUNK_SIZE * *WORLD_SIZE / 2) as f32, 0.0)));
     let player_id = player.lock().unwrap().index;
     let mut step = 0;
     let mut step_increment = 1;
@@ -91,12 +91,13 @@ fn main() {
         // Process only the latest message, if any
         if let Some(p) = latest_message {
 	    let mut e = p.player.clone();
+
 	    let e_i = e.index;
 	    match latest_message_server {
 		Some(s) => {e.ccoords = s.player.ccoords;},
 		None => {}
 	    };
-            let s = ClientData { entity: e, action: p.action.clone(), x_i: x_i, y_i: y_i};
+            let s = ClientData { entity: e, action: p.action.clone()};
             let a = ActionData {
                 entity: p.player.clone(),
                 action: p.action.action_type.clone(),

@@ -156,8 +156,8 @@ async fn handle_connection(
                 // Send back a response with the current world state
                 if let Ok(worlds) = rx.recv().await {
 		    let c = result_client_data.unwrap();
-		    if c.entity.ccoords.x as f32 + c.x_i as f32 >= 0.0 && c.entity.ccoords.y as f32 + c.y_i as f32 >= 0.0 && (c.entity.ccoords.x as f32 + c.x_i as f32) < (*WORLD_SIZE as f32) && (c.entity.ccoords.y as f32 + c.y_i as f32) < (*WORLD_SIZE as f32) {
-			let serialized_worlds = bincode::serialize(&worlds[0].fetch_chunk_x_y(c.entity.ccoords.x as f32 + c.x_i as f32, c.entity.ccoords.y as f32 + c.y_i as f32)).unwrap();
+		    if c.entity.ccoords.x as f32 >= 0.0 && c.entity.ccoords.y as f32 >= 0.0 && (c.entity.ccoords.x as f32 ) < (*WORLD_SIZE as f32) && (c.entity.ccoords.y as f32 ) < (*WORLD_SIZE as f32) {
+			let serialized_worlds = bincode::serialize(&worlds[0].fetch_chunk_x_y(c.entity.ccoords.x as f32, c.entity.ccoords.y as f32 )).unwrap();
 			let _ = stream.write_all(&serialized_worlds).await;
 		    }
 		    else {
