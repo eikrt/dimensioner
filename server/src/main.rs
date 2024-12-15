@@ -55,9 +55,9 @@ async fn main() {
 		    ActionType::Refresh => {},
                     ActionType::ConstructCannon => {
 			let mut coords = Coords_f32::new();
-			coords.x = o.entity.coords.x / HashableF32(*TILE_SIZE as f32);
-			coords.y = o.entity.coords.y / HashableF32(*TILE_SIZE as f32);
-                        let entity = Entity::from(
+			coords.x = HashableF32((o.entity.coords.x.as_f32() / *TILE_SIZE as f32).floor() * *TILE_SIZE as f32);
+			coords.y = HashableF32((o.entity.coords.y.as_f32() / *TILE_SIZE as f32).floor() * *TILE_SIZE as f32);
+                        let mut entity = Entity::from(
                             rng.gen_range(0..1000) as usize,
                             coords,
                             (0.0, 0.0, 0.0),
@@ -68,6 +68,25 @@ async fn main() {
                             Gender::Other,
                             0,
                         );
+			entity.ang = o.action.ang;
+                        worlds[0].update_chunk_with_entity(entity);
+                    },
+                    ActionType::ConstructRoad => {
+			let mut coords = Coords_f32::new();
+			coords.x = HashableF32((o.entity.coords.x.as_f32() / *TILE_SIZE as f32).floor() * *TILE_SIZE as f32);
+			coords.y = HashableF32((o.entity.coords.y.as_f32() / *TILE_SIZE as f32).floor() * *TILE_SIZE as f32);
+                        let mut entity = Entity::from(
+                            rng.gen_range(0..1000) as usize,
+                            coords,
+                            (0.0, 0.0, 0.0),
+                            EntityType::Road,
+                            Stats::gen(),
+                            Alignment::from(Faction::Marine),
+                            gen_human_name(Faction::Marine, &Gender::Other),
+                            Gender::Other,
+                            0,
+                        );
+			entity.ang = o.action.ang;
                         worlds[0].update_chunk_with_entity(entity);
                     }
                 }
@@ -106,7 +125,7 @@ async fn handle_connection(
     tx_c_a: broadcast::Sender<ClientData>,
     mut rx: broadcast::Receiver<Vec<World>>,
 ) {
-    let mut buffer = [0; 1024];
+    let mut buffer = [0; 65536];
 
     loop {
         let read_result = stream.read(&mut buffer).await;

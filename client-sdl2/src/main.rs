@@ -18,7 +18,7 @@ use std::time::Duration;
 use lazy_static::lazy_static;
 lazy_static! {
     pub static ref PARTITION_SIZE: usize = (*WORLD_SIZE as usize * *WORLD_SIZE as usize) / 16;
-    pub static ref VIEW_DISTANCE: usize = 4;
+    pub static ref VIEW_DISTANCE: usize = 0;
 }
 fn main() {
     let (tx, rx) = unbounded();
@@ -77,6 +77,7 @@ fn main() {
     let tx5_c = tx5.clone();
     let mut x_i = 0;
     let mut y_i = 0;
+    let s_clone = state.lock().unwrap().clone();
     thread::spawn(move || loop {
         // Continuously read from the channel until there are no more messages
         let mut latest_message = None;
@@ -95,7 +96,7 @@ fn main() {
 		Some(s) => {e.ccoords = s.player.ccoords;},
 		None => {}
 	    };
-            let s = ClientData { entity: e, x_i: x_i, y_i: y_i};
+            let s = ClientData { entity: e, action: p.action.clone(), x_i: x_i, y_i: y_i};
             let a = ActionData {
                 entity: p.player.clone(),
                 action: p.action.action_type.clone(),
@@ -119,8 +120,20 @@ fn main() {
 				tx6.send(ClientMsg::from(e.clone(), ActionContent::new()));
 			    }
 			    false
-			}
+			    }
 			);
+
+			for (k,v) in s_clone.clone().into_iter().enumerate() {
+			    if s_clone.clone().clone()[k].chunk.hash != chunk.hash {
+				state_clone_clone.lock().unwrap().remove(k);
+				state_clone_clone.lock().unwrap().push(RenderMsg::from(
+				    chunk.clone(),
+				    chunk.inquire_news(),
+				));
+				println!("Replaced chunk at ({}, {}) with new data.", 0, 0);
+			    }
+			}
+			state_clone_clone.lock().unwrap().clear();
                         state_clone_clone.lock().unwrap().push(RenderMsg::from(chunk.clone(), chunk.inquire_news()));
 		    }
                 },
@@ -149,6 +162,7 @@ fn main() {
     let mut state_clone = Arc::clone(&state);
     thread::spawn(move || loop {
         let _ = tx.send(state.lock().unwrap().clone());
+	state.lock().unwrap().clear();
         step += step_increment;
         if let Some(ref p) = p {
             if let Some(ref p_s) = p_server_local {

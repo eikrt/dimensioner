@@ -47,6 +47,7 @@ impl ClientMsg{
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ClientData {
     pub entity: Entity,
+    pub action: ActionContent,
     pub x_i: i32,
     pub y_i: i32,
 }
@@ -56,24 +57,28 @@ pub enum ActionType {
     Empty,
     Refresh,
     ConstructCannon,
+    ConstructRoad,
 }
 
 #[derive(Hash, Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub struct ActionContent {
     pub action_type: ActionType,
-    pub ang: HashableF32
+    pub ang: HashableF32,
+    pub traj: HashableF32,
 }
 impl ActionContent {
     pub fn new() -> ActionContent {
 	ActionContent {
 	    action_type: ActionType::Empty,
-	    ang: HashableF32(0.0)
+	    ang: HashableF32(0.0),
+	    traj: HashableF32(0.0)
 	}
     }
-    pub fn from(action_type: ActionType, ang: HashableF32) -> ActionContent {
+    pub fn from(action_type: ActionType, ang: HashableF32, traj: HashableF32) -> ActionContent {
 	ActionContent {
 	    action_type: action_type,
-	    ang: ang
+	    ang: ang,
+	    traj: traj,
 	}
     }
 }

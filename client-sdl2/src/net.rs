@@ -55,5 +55,9 @@ pub async fn send_client_data(client_data: ClientData) -> Result<Option<Chunk>, 
     // Await both tasks
     let _ = write_task.await?;
     let chunk = read_task.await?;
-    Ok(Some(chunk.unwrap().unwrap()))
+    match chunk {
+	Ok(Some(c)) => Ok(Some(c)),
+	Ok(None) => Ok(None),
+	Err(e) => {eprintln!("{}", e); Ok(None)}
+    }
 }
