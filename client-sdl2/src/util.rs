@@ -45,9 +45,15 @@ impl ClientMsg{
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum ClientDataType {
+    Chunk,
+    Refresh,
+}
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ClientData {
     pub entity: Entity,
     pub action: ActionContent,
+    pub data_type: ClientDataType,
 }
 
 #[derive(Hash, Clone, Serialize, Deserialize, Debug, PartialEq)]
@@ -56,6 +62,8 @@ pub enum ActionType {
     Refresh,
     ConstructCannon,
     ConstructRoad,
+    ConstructShell,
+    ConstructLandmine,
 }
 
 #[derive(Hash, Clone, Serialize, Deserialize, Debug, PartialEq)]

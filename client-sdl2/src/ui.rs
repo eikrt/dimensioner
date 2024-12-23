@@ -6,7 +6,7 @@ use sdl2::ttf::Font;
 use sdl2::video::Window;
 use std::collections::HashMap;
 use std::fs;
-
+use crate::worldgen::Camera;
 #[derive(Deserialize, Debug)]
 struct CharacterBox {
     box_dimensions: HashMap<String, BoxDimensions>,
@@ -20,6 +20,7 @@ struct BoxDimensions {
 
 pub fn draw_text(
     canvas: &mut Canvas<Window>,
+    camera: &Camera,
     m_coords: (i32,i32),
     font: &Font,
     text: &str,
@@ -28,6 +29,8 @@ pub fn draw_text(
     box_x: i32,
     box_y: i32,
 ) -> Result<(), String> {
+    let box_x = box_x * camera.scale_x as i32;
+    let box_y = box_y * camera.scale_y as i32;
     // Load and parse CharacterBox.toml
     let toml_str = fs::read_to_string(character_box_path)
         .map_err(|e| format!("Failed to read CharacterBox.toml: {}", e))?;
@@ -43,7 +46,7 @@ pub fn draw_text(
     // Draw the brass-colored background
     let brass_color = Color::RGB(181, 166, 66); // Brass-like color
     canvas.set_draw_color(brass_color);
-    let background_rect = Rect::new(box_x, box_y, box_dims.width, box_dims.height);
+    let background_rect = Rect::new(box_x, box_y, box_dims.width * camera.scale_x as u32, box_dims.height * camera.scale_y as u32);
     canvas.fill_rect(background_rect)?;
 
     // Draw the boundaries (a black rectangle around the box)

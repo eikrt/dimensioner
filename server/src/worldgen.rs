@@ -17,7 +17,7 @@ lazy_static! {
     pub static ref CHUNK_SIZE: u32 = 16;
     pub static ref TILE_SIZE: u32 = 16;
     pub static ref NOISE_SCALE: f64 = 64.0;
-    pub static ref VICINITY_DIST: i32 = 4;
+    pub static ref VICINITY_DIST: i32 = 2;
     pub static ref HUMAN_NAMES_F: Vec<String> = vec![
         "Kate".to_string(),
         "Elsa".to_string(),
@@ -116,7 +116,7 @@ impl TryInto<i32> for HashableF32{
 impl HashableF32 {
 
     pub fn sqrt(&self) -> Self {
-        HashableF32(self.0.sqrt())
+        HashableF32(self.as_f32().sqrt())
     }
     pub fn as_i32(&self) -> i32 {
         self.0.floor() as i32
@@ -160,6 +160,7 @@ pub struct Tasks {
     oil_rig: (u8, bool),
     fire: (u8, bool),
     explode: (u8, bool),
+    migrate: (u8, bool),
 }
 impl Tasks {
     pub fn new() -> Tasks {
@@ -172,6 +173,7 @@ impl Tasks {
             oil_rig: (0, true),
 	    fire: (0, false),
 	    explode: (0, false),
+	    migrate: (0, false),
         }
     }
 }
@@ -204,25 +206,25 @@ pub enum Item {
 }
 #[derive(Clone, Serialize, Deserialize, Debug, Hash)]
 pub struct Inventory {
-    items: Vec<Item>,
+    pub items: Vec<(Item, u32)>,
 }
 impl Inventory {
     pub fn new() -> Inventory {
         Inventory {
-            items: vec![] 
+            items: vec![(Item::Coin, 1000)] 
         }
     }
-    pub fn get_coins(&self) -> i32 {
-	return 0;
+    pub fn get_coins(&self) -> u32 {
+	return self.items[0].1;
     }
 }
 #[derive(Clone, Serialize, Deserialize, Debug, Hash)]
 pub struct Stats {
-    health: i8,
-    hunger: u8,
-    strength: u8,
-    intelligence: u8,
-    agility: u8,
+    pub health: i32,
+    pub hunger: u8,
+    pub strength: u8,
+    pub intelligence: u8,
+    pub agility: u8,
 }
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize, Hash)]
 pub enum Faction {
@@ -308,6 +310,7 @@ pub enum EntityType {
     Shell,
     Road,
     Explosion,
+    Landmine,
 }
 #[derive(Clone, Serialize, Deserialize, Debug, Hash, PartialEq)]
 pub struct Coords_i32 {
@@ -321,7 +324,7 @@ impl Coords_i32 {
 	bincode::serialize(self)
     }
 }
-#[derive(Clone, Serialize, Deserialize, Debug, Hash)]
+#[derive(Clone, Serialize, Deserialize, Debug, Hash, PartialEq)]
 pub struct Coords_f32 {
     pub x: HashableF32,
     pub y: HashableF32,
@@ -550,9 +553,15 @@ impl Entity {
         let mut rng = rand::thread_rng();
         let roll = rng.gen_range(0..10);
         if dist_f32_f32(&self.coords, &other.coords) <= *VICINITY_DIST {
+	    if other.etype == EntityType::Explosion {
+		self.stats.health -= 50;
+	    }
+	    if self.etype == EntityType::Landmine {
+		self.stats.health = -1;
+	    }
             if other.status == Status::Fighting {
                 let dmg = other.stats.strength * roll;
-                self.stats.health -= dmg as i8;
+                self.stats.health -= dmg as i32;
                 if self.alignment.personality.aggression > 25 {
                     self.status = Status::Fighting;
                 }
@@ -659,6 +668,12 @@ impl Chunk {
 		if e.etype == EntityType::Explosion {
 		    continue;
 		}
+		if e.etype == EntityType::Landmine {
+		    if e.stats.health <= 0 {
+			let mut s = Entity::gen_explosion(e.index + 1, e.coords.x.as_f32(),e.coords.y.as_f32(), e.coords.z.as_f32());
+			added_entities.push(s);
+		    }
+		}
 		if e.etype == EntityType::Shell {
 		    for t in &mut self.tiles {
 			if HashableF32(t.coords.x as f32).as_i32() == (e.coords.x / HashableF32(*TILE_SIZE as f32)).as_i32() && HashableF32(t.coords.y as f32).as_i32() == (e.coords.y / HashableF32(*TILE_SIZE as f32)).as_i32() {
@@ -677,7 +692,7 @@ impl Chunk {
             self.entities = self
                 .entities
                 .iter()
-                .filter(|e| e.stats.health > 0)
+                .filter(|e| e.stats.health > 0 && !e.tasks.migrate.1)
                 .cloned()
                 .collect();
         }
@@ -730,17 +745,15 @@ impl Chunk {
             let n2 = perlin2.get([
                 (x as f64) / *NOISE_SCALE * 2.0 + 0.1,
                 (y as f64) / *NOISE_SCALE * 2.0 + 0.1,
-            ]) * a
-                / 8.0;
+            ]) * a;
 
             let n3 = perlin3.get([
                 (x as f64) / (*NOISE_SCALE * 8.0) + 0.1,
                 (y as f64) / (*NOISE_SCALE * 8.0) + 0.1,
-            ]) * a
-                * -8.0;
-            let height: i32 = (n1 + n2 + n3 + rng.gen_range(-1.0..1.0)) as i32;
+            ]) * a;
+            let height: f32 = (n1 + n2 + n3 + rng.gen_range(-0.5..1.0)) as f32;
             let gender = GENDERS.choose(&mut rand::thread_rng()).unwrap();
-            if height > 0 && !discard_entities && rng.gen_range(0..32) == 1 {
+            if height >= 0.0 && rng.gen_range(0..32) == 1 {
                 entities.push(Entity::from(
                     c as usize,
                     Coords_f32::from((a_x as f32, a_y as f32, height as f32)),
@@ -753,7 +766,7 @@ impl Chunk {
 		    0,
                 ))
             }
-            if height > 0 && !discard_entities && rng.gen_range(0..16) == 1 {
+            if height >= 0.0 && rng.gen_range(0..64) == 1 {
                 entities.push(Entity::from(
                     c as usize,
                     Coords_f32::from((a_x as f32, a_y as f32, height as f32)),
@@ -766,7 +779,7 @@ impl Chunk {
 		    0,
                 ))
             }
-            if height > 0 && !discard_entities && rng.gen_range(0..16) == 1 {
+            if height >= 0.0 && rng.gen_range(0..64) == 1 {
                 entities.push(Entity::from(
                     c as usize,
                     Coords_f32::from((a_x as f32, a_y as f32, height as f32)),
@@ -779,7 +792,7 @@ impl Chunk {
 		    0,
                 ))
             }
-            if height > 0 && !discard_entities && rng.gen_range(0..16) == 1 {
+            if height >= 0.0 && rng.gen_range(0..64) == 1 {
                 entities.push(Entity::from(
                     c as usize,
                     Coords_f32::from((a_x as f32, a_y as f32, height as f32)),
@@ -792,7 +805,7 @@ impl Chunk {
 		    0,
                 ))
             }
-            if height > 0 && !discard_entities && rng.gen_range(0..16) == 1 {
+            if height >= 0.0 && rng.gen_range(0..64) == 1 {
                 entities.push(Entity::from(
                     c as usize,
                     Coords_f32::from((a_x as f32, a_y as f32, height as f32)),
@@ -906,7 +919,7 @@ impl World {
 				//*existing_entity = e.clone();
 			    } else if entity.stats.health > 0 {
 				added_entities.lock().unwrap().insert(c.index, entity.clone());
-				entity.stats.health = -1;
+				entity.tasks.migrate.1 = true;
 				// Add the new entity
 			    }
 			}

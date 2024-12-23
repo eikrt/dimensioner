@@ -1,6 +1,6 @@
 use bincode;
 use dimensioner_server::util::RenderMsg;
-use dimensioner_server::util::{ActionData, ActionType, ClientData};
+use dimensioner_server::util::{ActionData, ActionType, ClientData, ClientDataType};
 use dimensioner_server::worldgen::*;
 use lazy_static::lazy_static;
 use rand::rngs::StdRng;
@@ -88,6 +88,36 @@ async fn main() {
                         );
 			entity.ang = o.action.ang;
                         worlds[0].update_chunk_with_entity(entity);
+                    },
+                    ActionType::ConstructLandmine => {
+			let mut coords = Coords_f32::new();
+			coords.x = HashableF32((o.entity.coords.x.as_f32() / *TILE_SIZE as f32).floor() * *TILE_SIZE as f32);
+			coords.y = HashableF32((o.entity.coords.y.as_f32() / *TILE_SIZE as f32).floor() * *TILE_SIZE as f32);
+                        let mut entity = Entity::from(
+                            rng.gen_range(0..1000) as usize,
+                            coords,
+                            (0.0, 0.0, 0.0),
+                            EntityType::Landmine,
+                            Stats::gen(),
+                            Alignment::from(Faction::Marine),
+                            gen_human_name(Faction::Marine, &Gender::Other),
+                            Gender::Other,
+                            0,
+                        );
+			entity.ang = o.action.ang;
+                        worlds[0].update_chunk_with_entity(entity);
+                    },
+                    ActionType::ConstructShell => {
+			let mut coords = Coords_f32::new();
+			coords.x = HashableF32((o.entity.coords.x.as_f32() / *TILE_SIZE as f32).floor() * *TILE_SIZE as f32);
+			coords.y = HashableF32((o.entity.coords.y.as_f32() / *TILE_SIZE as f32).floor() * *TILE_SIZE as f32);
+			let mut entity = Entity::gen_shell(rng.gen_range(0..1000), coords.x.as_f32(),coords.y.as_f32(), coords.z.as_f32());
+			entity.traj = entity.traj;
+			entity.vel.x = HashableF32(o.action.ang.as_f32().sin() * 1.0) * HashableF32(1.0);
+			entity.vel.y = HashableF32(-o.action.ang.as_f32().cos() * 1.0) * HashableF32(1.0);
+			entity.vel.z = HashableF32(o.action.traj.as_f32().cos() * 1.0) * HashableF32(0.5);
+			entity.ang = o.action.ang;
+                        worlds[0].update_chunk_with_entity(entity);
                     }
                 }
             }
@@ -157,8 +187,16 @@ async fn handle_connection(
                 if let Ok(worlds) = rx.recv().await {
 		    let c = result_client_data.unwrap();
 		    if c.entity.ccoords.x as f32 >= 0.0 && c.entity.ccoords.y as f32 >= 0.0 && (c.entity.ccoords.x as f32 ) < (*WORLD_SIZE as f32) && (c.entity.ccoords.y as f32 ) < (*WORLD_SIZE as f32) {
-			let serialized_worlds = bincode::serialize(&worlds[0].fetch_chunk_x_y(c.entity.ccoords.x as f32, c.entity.ccoords.y as f32 )).unwrap();
-			let _ = stream.write_all(&serialized_worlds).await;
+			match c.data_type {
+			    ClientDataType::Chunk => {
+				let serialized_worlds = bincode::serialize(&worlds[0].fetch_chunk_x_y(c.entity.ccoords.x as f32, c.entity.ccoords.y as f32 )).unwrap();
+				let _ = stream.write_all(&serialized_worlds).await;
+			    },
+			    ClientDataType::Refresh => {
+				let serialized_worlds = bincode::serialize(&worlds[0].fetch_chunk_x_y(c.entity.ccoords.x as f32, c.entity.ccoords.y as f32 )).unwrap();
+				let _ = stream.write_all(&serialized_worlds).await;
+			    }
+			}
 		    }
 		    else {
 
