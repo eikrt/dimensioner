@@ -1,5 +1,5 @@
 use crate::util::{ClientMsg, MainMsg, RenderMsg};
-use crate::worldgen::{Chunk, Coords, Entity, Faction, CHUNK_SIZE, TILE_SIZE};
+use crate::worldgen::{Chunk, Entity, Camera, Faction, CHUNK_SIZE, TILE_SIZE};
 use gl::types::*;
 use lazy_static::lazy_static;
 use sdl2::event::Event;
@@ -13,20 +13,6 @@ lazy_static! {
     pub static ref WINDOW_WIDTH: u32 = 1240;
     pub static ref WINDOW_HEIGHT: u32 = 760;
     pub static ref DEFAULT_ZOOM: f32 = 1.0;
-}
-
-#[derive(Clone)]
-pub struct Camera {
-    pub coords: Coords,
-    pub zoom: f32,
-}
-impl Camera {
-    pub fn new() -> Camera {
-        Camera {
-            coords: Coords::new(),
-            zoom: *DEFAULT_ZOOM,
-        }
-    }
 }
 
 fn init_opengl() {
@@ -83,13 +69,14 @@ fn create_shader_program() -> GLuint {
     program
 }
 
-fn create_terrain_buffer(chunk: &Chunk) -> (GLuint, usize) {
+fn create_terrain_buffer(chunk: &Chunk, camera: &Camera) -> (GLuint, usize) {
     let mut vertices = Vec::new();
 
     for tile in &chunk.tiles {
-        vertices.push(tile.coords.x as f32);
-        vertices.push(tile.height as f32);
-        vertices.push(tile.coords.y as f32);
+        vertices.push(tile.coords.x as f32 + camera.coords.x.as_f32());
+        vertices.push(tile.coords.z as f32 + camera.coords.y.as_f32());
+        vertices.push(tile.coords.y as f32 + camera.coords.z.as_f32());
+	println!("{}", tile.coords.x as f32 + camera.coords.x.as_f32());
     }
 
     let (mut vbo, mut vao) = (0, 0);
@@ -134,7 +121,7 @@ pub fn render_server(
     gl_attr.set_context_version(3, 3);
 
     let window = video_subsystem
-        .window("Baltia", *WINDOW_WIDTH, *WINDOW_HEIGHT)
+        .window("Dimensioner", *WINDOW_WIDTH, *WINDOW_HEIGHT)
         .opengl()
         .position_centered()
         .build()
@@ -165,11 +152,11 @@ pub fn render_server(
                 Event::KeyDown {
                     keycode: Some(Keycode::Plus),
                     ..
-                } => camera.zoom += 0.1,
+                } => camera.scale_x += 0.1,
                 Event::KeyDown {
                     keycode: Some(Keycode::Minus),
                     ..
-                } => camera.zoom -= 0.1,
+                } => camera.scale_y -= 0.1,
                 _ => {}
             }
         }
@@ -180,7 +167,7 @@ pub fn render_server(
                 gl::UseProgram(shader_program);
                 for message in &messages {
                     let chunk = &message.chunk;
-                    let (vao, count) = create_terrain_buffer(chunk);
+                    let (vao, count) = create_terrain_buffer(chunk, &camera);
 
                     gl::BindVertexArray(vao);
                     gl::DrawArrays(gl::TRIANGLES, 0, count as i32);

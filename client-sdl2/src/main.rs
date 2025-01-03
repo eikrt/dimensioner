@@ -2,13 +2,13 @@ use async_std::task;
 use crossbeam::channel::unbounded;
 use dimensioner_client_sdl2::net::send_client_data;
 use dimensioner_client_sdl2::plot::plot;
-use dimensioner_client_sdl2::renderer::render_server;
+use dimensioner_client_sdl2::renderer_opengl::render_server;
 use dimensioner_client_sdl2::util::{
     ActionContent, ActionData, ActionType, ClientData, ClientDataType, ClientMsg, MainMsg,
     RenderMsg,
 };
 use dimensioner_client_sdl2::worldgen::{
-    worldgen, Camera, Entity, News, CHUNK_SIZE, TILE_SIZE, WORLD_SIZE,
+    worldgen, globegen, Camera, Entity, News, CHUNK_SIZE, TILE_SIZE, WORLD_SIZE,
 };
 
 use rand::Rng;

@@ -64,6 +64,8 @@ pub enum ActionType {
     ConstructRoad,
     ConstructShell,
     ConstructLandmine,
+    ConstructCar,
+    Interact,
 }
 
 #[derive(Hash, Clone, Serialize, Deserialize, Debug, PartialEq)]

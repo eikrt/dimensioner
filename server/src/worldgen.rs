@@ -1,19 +1,20 @@
 use crate::math::{dist_f32_f32, dist_f32_i32};
-use crate::util::{ActionType};
+use crate::util::ActionType;
+use image::{imageops::FilterType, io::Reader as ImageReader, DynamicImage, GenericImageView};
 use lazy_static::lazy_static;
 use noise::{NoiseFn, Perlin};
 use rand::prelude::SliceRandom;
 use rand::Rng;
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use serde::{Serialize, Deserialize};
-use sha2::{Sha256, Digest};
 use std::hash::{Hash, Hasher};
-use std::ops::{Add, Sub, Div, AddAssign, SubAssign, Mul};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 lazy_static! {
-    pub static ref WORLD_SIZE: u32 = 4;
+    pub static ref WORLD_SIZE: u32 = 64;
     pub static ref CHUNK_SIZE: u32 = 16;
     pub static ref TILE_SIZE: u32 = 16;
     pub static ref NOISE_SCALE: f64 = 64.0;
@@ -43,8 +44,8 @@ impl Hash for HashableF32 {
         let floored = self.0.floor() as i32;
         floored.hash(state);
     }
-}// Implement AddAssign trait for FlooredF32
-impl AddAssign for HashableF32{
+} // Implement AddAssign trait for FlooredF32
+impl AddAssign for HashableF32 {
     fn add_assign(&mut self, other: Self) {
         self.0 += other.0;
     }
@@ -94,17 +95,17 @@ impl Mul for HashableF32 {
     }
 }
 // Implement other necessary traits for convenience
-impl PartialEq for HashableF32{
+impl PartialEq for HashableF32 {
     fn eq(&self, other: &Self) -> bool {
         self.0.floor() == other.0.floor()
     }
 }
-impl TryInto<i32> for HashableF32{
+impl TryInto<i32> for HashableF32 {
     type Error = &'static str;
 
     fn try_into(self) -> Result<i32, Self::Error> {
         let floored_value = self.0.floor();
-        
+
         // Check if the floored value is within i32 range
         if floored_value < (i32::MIN as f32) || floored_value > (i32::MAX as f32) {
             Err("Value is out of range for i32")
@@ -114,7 +115,6 @@ impl TryInto<i32> for HashableF32{
     }
 }
 impl HashableF32 {
-
     pub fn sqrt(&self) -> Self {
         HashableF32(self.as_f32().sqrt())
     }
@@ -141,8 +141,8 @@ impl Camera {
             ccoords: Coords_i32::new(),
             render_distance_w: 128 as i32,
             render_distance_h: 128 as i32,
-	    scale_x: 1.0,
-	    scale_y: 1.0,
+            scale_x: 1.0,
+            scale_y: 1.0,
         }
     }
     pub fn tick(&mut self) {
@@ -171,9 +171,9 @@ impl Tasks {
             industry: (0, true),
             farm: (0, true),
             oil_rig: (0, true),
-	    fire: (0, false),
-	    explode: (0, false),
-	    migrate: (0, false),
+            fire: (0, false),
+            explode: (0, false),
+            migrate: (0, false),
         }
     }
 }
@@ -211,11 +211,11 @@ pub struct Inventory {
 impl Inventory {
     pub fn new() -> Inventory {
         Inventory {
-            items: vec![(Item::Coin, 1000)] 
+            items: vec![(Item::Coin, 1000)],
         }
     }
     pub fn get_coins(&self) -> u32 {
-	return self.items[0].1;
+        return self.items[0].1;
     }
 }
 #[derive(Clone, Serialize, Deserialize, Debug, Hash)]
@@ -311,6 +311,7 @@ pub enum EntityType {
     Road,
     Explosion,
     Landmine,
+    Car,
 }
 #[derive(Clone, Serialize, Deserialize, Debug, Hash, PartialEq)]
 pub struct Coords_i32 {
@@ -319,9 +320,8 @@ pub struct Coords_i32 {
     pub z: i32,
 }
 impl Coords_i32 {
-
     pub fn as_bytes(&self) -> Result<Vec<u8>, bincode::Error> {
-	bincode::serialize(self)
+        bincode::serialize(self)
     }
 }
 #[derive(Clone, Serialize, Deserialize, Debug, Hash, PartialEq)]
@@ -331,9 +331,8 @@ pub struct Coords_f32 {
     pub z: HashableF32,
 }
 impl Coords_f32 {
-
     pub fn as_bytes(&self) -> Result<Vec<u8>, bincode::Error> {
-	bincode::serialize(self)
+        bincode::serialize(self)
     }
 }
 #[derive(Clone, Serialize, Deserialize, Debug, Hash)]
@@ -360,7 +359,11 @@ impl Coords_f32 {
         }
     }
     pub fn new() -> Coords_f32 {
-        Coords_f32 { x: HashableF32(0.0), y: HashableF32(0.0), z: HashableF32(0.0) }
+        Coords_f32 {
+            x: HashableF32(0.0),
+            y: HashableF32(0.0),
+            z: HashableF32(0.0),
+        }
     }
 }
 impl Coords_i32 {
@@ -393,6 +396,7 @@ pub struct Entity {
     pub gender: Gender,
     pub tasks: Tasks,
     pub current_world: usize,
+    pub linked_entity_id: u64,
 }
 impl Entity {
     pub fn new(index: usize) -> Entity {
@@ -402,7 +406,7 @@ impl Entity {
             vel: Coords_f32::new(),
             ang: HashableF32(0.0),
             traj: HashableF32(0.0),
-	    current_action: ActionType::Empty,
+            current_action: ActionType::Empty,
             etype: EntityType::Human,
             stats: Stats::new(),
             status: Status::Idle,
@@ -412,15 +416,22 @@ impl Entity {
             name: "".to_string(),
             gender: Gender::Female,
             tasks: Tasks::new(),
-	    current_world: 0,
+            current_world: 0,
+            linked_entity_id: 0,
         }
     }
-    pub fn gen_player(id: usize, x:f32, y:f32, z: f32) -> Entity {
+    pub fn gen_player(id: usize, x: f32, y: f32, z: f32) -> Entity {
         Entity {
-            coords: Coords_f32::from((x,y,z)),
-           // coords: Coords_f32::from((0.0,0.0,0.0)),
-            ccoords: Coords_i32::from(((HashableF32(x) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32)).as_i32() , (HashableF32(y) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32)).as_i32(), (HashableF32(z) / HashableF32(*CHUNK_SIZE as f32)).as_i32())),
-	    current_action: ActionType::Empty,
+            coords: Coords_f32::from((x, y, z)),
+            // coords: Coords_f32::from((0.0,0.0,0.0)),
+            ccoords: Coords_i32::from((
+                (HashableF32(x) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32))
+                    .as_i32(),
+                (HashableF32(y) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32))
+                    .as_i32(),
+                (HashableF32(z) / HashableF32(*CHUNK_SIZE as f32)).as_i32(),
+            )),
+            current_action: ActionType::Empty,
             vel: Coords_f32::new(),
             ang: HashableF32(0.0),
             traj: HashableF32(0.0),
@@ -433,14 +444,21 @@ impl Entity {
             name: "Player".to_string(),
             gender: Gender::Female,
             tasks: Tasks::new(),
-	    current_world: 0,
+            current_world: 0,
+            linked_entity_id: 0,
         }
     }
-    pub fn gen_shell(id: usize, x:f32, y:f32, z: f32) -> Entity {
+    pub fn gen_shell(id: usize, x: f32, y: f32, z: f32) -> Entity {
         Entity {
-            coords: Coords_f32::from((x,y,z)),
-            ccoords: Coords_i32::from(((HashableF32(x) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32)).as_i32() , (HashableF32(y) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32)).as_i32(), (HashableF32(z) / HashableF32(*CHUNK_SIZE as f32)).as_i32())),
-	    current_action: ActionType::Empty,
+            coords: Coords_f32::from((x, y, z)),
+            ccoords: Coords_i32::from((
+                (HashableF32(x) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32))
+                    .as_i32(),
+                (HashableF32(y) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32))
+                    .as_i32(),
+                (HashableF32(z) / HashableF32(*CHUNK_SIZE as f32)).as_i32(),
+            )),
+            current_action: ActionType::Empty,
             vel: Coords_f32::new(),
             ang: HashableF32(0.0),
             traj: HashableF32(0.0),
@@ -453,14 +471,21 @@ impl Entity {
             name: "Shell".to_string(),
             gender: Gender::Other,
             tasks: Tasks::new(),
-	    current_world: 0,
+            current_world: 0,
+            linked_entity_id: 0,
         }
     }
-    pub fn gen_explosion(id: usize, x:f32, y:f32, z: f32) -> Entity {
+    pub fn gen_explosion(id: usize, x: f32, y: f32, z: f32) -> Entity {
         Entity {
-            coords: Coords_f32::from((x,y,z)),
-            ccoords: Coords_i32::from(((HashableF32(x) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32)).as_i32() , (HashableF32(y) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32)).as_i32(), (HashableF32(z) / HashableF32(*CHUNK_SIZE as f32)).as_i32())),
-	    current_action: ActionType::Empty,
+            coords: Coords_f32::from((x, y, z)),
+            ccoords: Coords_i32::from((
+                (HashableF32(x) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32))
+                    .as_i32(),
+                (HashableF32(y) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32))
+                    .as_i32(),
+                (HashableF32(z) / HashableF32(*CHUNK_SIZE as f32)).as_i32(),
+            )),
+            current_action: ActionType::Empty,
             vel: Coords_f32::new(),
             ang: HashableF32(0.0),
             traj: HashableF32(0.0),
@@ -473,7 +498,35 @@ impl Entity {
             name: "Explosion".to_string(),
             gender: Gender::Other,
             tasks: Tasks::new(),
-	    current_world: 0,
+            current_world: 0,
+            linked_entity_id: 0,
+        }
+    }
+    pub fn gen_car(id: usize, x: f32, y: f32, z: f32) -> Entity {
+        Entity {
+            coords: Coords_f32::from((x, y, z)),
+            ccoords: Coords_i32::from((
+                (HashableF32(x) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32))
+                    .as_i32(),
+                (HashableF32(y) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32))
+                    .as_i32(),
+                (HashableF32(z) / HashableF32(*CHUNK_SIZE as f32)).as_i32(),
+            )),
+            current_action: ActionType::Empty,
+            vel: Coords_f32::new(),
+            ang: HashableF32(0.0),
+            traj: HashableF32(0.0),
+            etype: EntityType::Car,
+            stats: Stats::new(),
+            status: Status::Idle,
+            alignment: Alignment::new(),
+            inventory: Inventory::new(),
+            index: id,
+            name: "Car".to_string(),
+            gender: Gender::Other,
+            tasks: Tasks::new(),
+            current_world: 0,
+            linked_entity_id: 0,
         }
     }
     pub fn from(
@@ -485,12 +538,18 @@ impl Entity {
         alignment: Alignment,
         name: String,
         gender: Gender,
-	current_world: usize,
+        current_world: usize,
     ) -> Entity {
         Entity {
             coords: coords.clone(),
-            ccoords: Coords_i32::from(((coords.x / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32)).as_i32() , (coords.y / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32)).as_i32(), (coords.z / HashableF32(*CHUNK_SIZE as f32)).as_i32())),
-	    current_action: ActionType::Empty,
+            ccoords: Coords_i32::from((
+                (coords.x / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32))
+                    .as_i32(),
+                (coords.y / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32))
+                    .as_i32(),
+                (coords.z / HashableF32(*CHUNK_SIZE as f32)).as_i32(),
+            )),
+            current_action: ActionType::Empty,
             etype: etype,
             vel: Coords_f32::new(),
             ang: HashableF32(0.0),
@@ -503,20 +562,25 @@ impl Entity {
             name: name,
             gender: gender,
             tasks: Tasks::new(),
-	    current_world: current_world
+            current_world: current_world,
+            linked_entity_id: 0,
         }
     }
     pub fn get_sheet(&mut self) -> String {
-	return format!("{}\n{:?}", self.name, self.etype).to_string();
+        return format!("{}\n{:?}", self.name, self.etype).to_string();
     }
     pub fn fire(&mut self) {
-	self.tasks.fire = (1, true);
+        self.tasks.fire = (1, true);
     }
     pub fn resolve(&mut self, step_increment: i32) {
         // movement
-	
-	self.ccoords.x = (self.coords.x / HashableF32(*CHUNK_SIZE as f32) / HashableF32(*TILE_SIZE as f32)).as_i32();
-	self.ccoords.y = (self.coords.y / HashableF32(*CHUNK_SIZE as f32) / HashableF32(*TILE_SIZE as f32)).as_i32();
+
+        self.ccoords.x =
+            (self.coords.x / HashableF32(*CHUNK_SIZE as f32) / HashableF32(*TILE_SIZE as f32))
+                .as_i32();
+        self.ccoords.y =
+            (self.coords.y / HashableF32(*CHUNK_SIZE as f32) / HashableF32(*TILE_SIZE as f32))
+                .as_i32();
         if self.stats.hunger > 0 {
             self.stats.hunger -= 1;
         }
@@ -531,34 +595,39 @@ impl Entity {
         }
         // resolve tasks
         //
-	if self.etype == EntityType::Shell {
+        if self.etype == EntityType::Shell {
             self.coords.x += self.vel.x;
             self.coords.y += self.vel.y;
-	    self.coords.z += self.vel.z;
-	    self.vel.z -= HashableF32(0.0064);
-	}
-	if self.etype == EntityType::Explosion {
-	    self.stats.health -= 16;
-	}
-	if self.etype == EntityType::Cannon {
-
-	    let now = SystemTime::now();
-	    if now.duration_since(UNIX_EPOCH).expect("Failed to assert time").as_millis() % 256 == 0 {
-		self.fire();
-	    }
-	}
+            self.coords.z += self.vel.z;
+            self.vel.z -= HashableF32(0.0064);
+        }
+        if self.etype == EntityType::Explosion {
+            self.stats.health -= 16;
+        }
+        if self.etype == EntityType::Cannon {
+            let now = SystemTime::now();
+            if now
+                .duration_since(UNIX_EPOCH)
+                .expect("Failed to assert time")
+                .as_millis()
+                % 256
+                == 0
+            {
+                self.fire();
+            }
+        }
         if self.tasks.build.1 {}
     }
     pub fn resolve_against(&mut self, other: &mut Entity, step_increment: i32) {
         let mut rng = rand::thread_rng();
         let roll = rng.gen_range(0..10);
         if dist_f32_f32(&self.coords, &other.coords) <= *VICINITY_DIST {
-	    if other.etype == EntityType::Explosion {
-		self.stats.health -= 50;
-	    }
-	    if self.etype == EntityType::Landmine {
-		self.stats.health = -1;
-	    }
+            if other.etype == EntityType::Explosion {
+                self.stats.health -= 50;
+            }
+            if self.etype == EntityType::Landmine {
+                self.stats.health = -1;
+            }
             if other.status == Status::Fighting {
                 let dmg = other.stats.strength * roll;
                 self.stats.health -= dmg as i32;
@@ -597,10 +666,10 @@ impl Tile {
         }
     }
     pub fn get_sheet(&mut self) -> String {
-	return format!("{:?}", self.ttype).to_string();
+        return format!("{:?}", self.ttype).to_string();
     }
     pub fn as_bytes(&self) -> Result<Vec<u8>, bincode::Error> {
-	bincode::serialize(self)
+        bincode::serialize(self)
     }
 }
 #[derive(Clone, Serialize, Deserialize, Debug, Hash)]
@@ -609,24 +678,35 @@ pub struct Chunk {
     pub entities: Vec<Entity>,
     pub coords: Coords_i32,
     pub index: usize,
-    pub hash: u64, 
+    pub hash: u64,
+    pub timezone: u8,
+    pub observed: bool,
 }
 
 impl Chunk {
-    pub fn from(tiles: Vec<Tile>, entities: Vec<Entity>, coords: Coords_i32, index: usize, hash: u64) -> Chunk {
+    pub fn from(
+        tiles: Vec<Tile>,
+        entities: Vec<Entity>,
+        coords: Coords_i32,
+        index: usize,
+        hash: u64,
+        timezone: u8,
+    ) -> Chunk {
         Chunk {
             tiles,
             entities,
             coords,
             index,
-	    hash,
+            hash,
+            timezone: timezone,
+            observed: false,
         }
     }
     pub fn as_bytes(&self) -> Result<Vec<u8>, bincode::Error> {
-	bincode::serialize(self)
+        bincode::serialize(self)
     }
     pub fn as_string(&self) -> Result<String, serde_json::Error> {
-	serde_json::to_string(self)
+        serde_json::to_string(self)
     }
     pub fn new() -> Chunk {
         Chunk {
@@ -634,17 +714,23 @@ impl Chunk {
             entities: vec![],
             coords: Coords_i32::new(),
             index: 0,
-	    hash: 0,
+            hash: 0,
+            timezone: 0,
+            observed: false,
         }
     }
-    pub fn resolve(&mut self, step_increment: i32) {
+    pub fn resolve(&mut self, step_increment: i32) -> Vec<Entity> {
+        if !self.observed {
+            return vec![];
+        }
         let mut hasher = Sha256::new();
         hasher.update(bincode::serialize(&self.tiles).unwrap());
         hasher.update(bincode::serialize(&self.entities).unwrap());
-	let mut added_entities: Vec<Entity> = vec![];
+        let mut added_entities: Vec<Entity> = vec![];
+        let mut leftover_entities: Vec<Entity> = vec![];
         let result = hasher.finalize();
-	self.hash = u64::from_le_bytes(result[0..8].try_into().expect("Failed to get 8 bytes"));
-	for i in 0..step_increment {
+        self.hash = u64::from_le_bytes(result[0..8].try_into().expect("Failed to get 8 bytes"));
+        for i in 0..step_increment {
             for _t in &mut self.tiles {}
             let mut entities_clone = self.entities.clone();
             for clone in &mut entities_clone {
@@ -654,41 +740,65 @@ impl Chunk {
             }
             for entity in &mut self.entities {
                 entity.resolve(step_increment);
-		if entity.tasks.fire.1 {
-		    let mut s = Entity::gen_shell(entity.index + 1, entity.coords.x.as_f32(),entity.coords.y.as_f32(), entity.coords.z.as_f32());
-		    s.traj = entity.traj;
+                if entity.tasks.fire.1 {
+                    let mut s = Entity::gen_shell(
+                        entity.index + 1,
+                        entity.coords.x.as_f32(),
+                        entity.coords.y.as_f32(),
+                        entity.coords.z.as_f32(),
+                    );
+                    s.traj = entity.traj;
                     s.vel.x = HashableF32(entity.ang.0.sin() * 1.0) * HashableF32(1.0);
                     s.vel.y = HashableF32(-entity.ang.0.cos() * 1.0) * HashableF32(1.0);
                     s.vel.z = HashableF32(entity.traj.0.cos() * 1.0) * HashableF32(0.5);
-		    added_entities.push(s);
-		    entity.tasks.fire.1 = false;
-		}
-            }
-	    for e in &mut self.entities {
-		if e.etype == EntityType::Explosion {
-		    continue;
-		}
-		if e.etype == EntityType::Landmine {
-		    if e.stats.health <= 0 {
-			let mut s = Entity::gen_explosion(e.index + 1, e.coords.x.as_f32(),e.coords.y.as_f32(), e.coords.z.as_f32());
-			added_entities.push(s);
-		    }
-		}
-		if e.etype == EntityType::Shell {
-		    for t in &mut self.tiles {
-			if HashableF32(t.coords.x as f32).as_i32() == (e.coords.x / HashableF32(*TILE_SIZE as f32)).as_i32() && HashableF32(t.coords.y as f32).as_i32() == (e.coords.y / HashableF32(*TILE_SIZE as f32)).as_i32() {
-			    if e.coords.z.as_i32() < t.coords.z {
-				e.stats.health = -1;
-				t.coords.z -= 1;
-				let mut s = Entity::gen_explosion(e.index + 1, e.coords.x.as_f32(),e.coords.y.as_f32(), e.coords.z.as_f32());
-				added_entities.push(s);
-			    }
-			}
-		    }
+                    added_entities.push(s);
+                    entity.tasks.fire.1 = false;
+                }
 
-		}
-	    }
-	    self.entities.extend(added_entities.clone());
+                if entity.ccoords != self.coords {
+		    println!("{:?}, {:?}", entity.ccoords, self.coords);
+                    leftover_entities.push(entity.clone());
+                    entity.tasks.migrate.1 = true;
+                }
+            }
+            for e in &mut self.entities {
+                if e.etype == EntityType::Explosion {
+                    continue;
+                }
+                if e.etype == EntityType::Landmine {
+                    if e.stats.health <= 0 {
+                        let mut s = Entity::gen_explosion(
+                            e.index + 1,
+                            e.coords.x.as_f32(),
+                            e.coords.y.as_f32(),
+                            e.coords.z.as_f32(),
+                        );
+                        added_entities.push(s);
+                    }
+                }
+                if e.etype == EntityType::Shell {
+                    for t in &mut self.tiles {
+                        if HashableF32(t.coords.x as f32).as_i32()
+                            == (e.coords.x / HashableF32(*TILE_SIZE as f32)).as_i32()
+                            && HashableF32(t.coords.y as f32).as_i32()
+                                == (e.coords.y / HashableF32(*TILE_SIZE as f32)).as_i32()
+                        {
+                            if e.coords.z.as_i32() < t.coords.z {
+                                e.stats.health = -1;
+                                t.coords.z -= 1;
+                                let mut s = Entity::gen_explosion(
+                                    e.index + 1,
+                                    e.coords.x.as_f32(),
+                                    e.coords.y.as_f32(),
+                                    e.coords.z.as_f32(),
+                                );
+                                added_entities.push(s);
+                            }
+                        }
+                    }
+                }
+            }
+            self.entities.extend(added_entities.clone());
             self.entities = self
                 .entities
                 .iter()
@@ -696,8 +806,9 @@ impl Chunk {
                 .cloned()
                 .collect();
         }
+        leftover_entities
     }
-    pub fn gen(&mut self, seed: u32) -> Chunk {
+    pub fn gen(&mut self, seed: u32, img: Option<&DynamicImage>) -> Chunk {
         let mut rng = rand::thread_rng();
         let mut tiles: Vec<Tile> = vec![];
         let mut entities: Vec<Entity> = vec![];
@@ -734,8 +845,8 @@ impl Chunk {
         for c in 0..(*CHUNK_SIZE as i32 * *CHUNK_SIZE as i32) {
             let x = c % (*CHUNK_SIZE as i32) + self.coords.x as i32 * *CHUNK_SIZE as i32;
             let y = (c / *CHUNK_SIZE as i32) + self.coords.y as i32 * *CHUNK_SIZE as i32;
-	    let a_x = x * *TILE_SIZE as i32;
-	    let a_y = y * *TILE_SIZE as i32;
+            let a_x = x * *TILE_SIZE as i32;
+            let a_y = y * *TILE_SIZE as i32;
             let a = 2.0;
             let n1 = perlin.get([
                 (x as f64) / *NOISE_SCALE + 0.1,
@@ -751,7 +862,19 @@ impl Chunk {
                 (x as f64) / (*NOISE_SCALE * 8.0) + 0.1,
                 (y as f64) / (*NOISE_SCALE * 8.0) + 0.1,
             ]) * a;
-            let height: f32 = (n1 + n2 + n3 + rng.gen_range(-0.5..1.0)) as f32;
+            let height = match img {
+                Some(s) => {
+                    let color = s.get_pixel(x as u32, y as u32).0[1];
+                    let mut height: f32;
+                    if color == 0 {
+                        height = -1.0;
+                    } else {
+                        height = 1.0;
+                    }
+                    height
+                }
+                None => (n1 + n2 + n3 + rng.gen_range(-0.5..1.0)) as f32,
+            };
             let gender = GENDERS.choose(&mut rand::thread_rng()).unwrap();
             if height >= 0.0 && rng.gen_range(0..32) == 1 {
                 entities.push(Entity::from(
@@ -763,7 +886,7 @@ impl Chunk {
                     Alignment::from(faction.clone()),
                     gen_human_name(faction.clone(), gender),
                     gender.clone(),
-		    0,
+                    0,
                 ))
             }
             if height >= 0.0 && rng.gen_range(0..64) == 1 {
@@ -774,9 +897,9 @@ impl Chunk {
                     EntityType::Cauliflower,
                     Stats::gen(),
                     Alignment::from(faction.clone()),
-		    "Cauliflower".to_string(),
+                    "Cauliflower".to_string(),
                     gender.clone(),
-		    0,
+                    0,
                 ))
             }
             if height >= 0.0 && rng.gen_range(0..64) == 1 {
@@ -787,9 +910,9 @@ impl Chunk {
                     EntityType::Lily,
                     Stats::gen(),
                     Alignment::from(faction.clone()),
-		    "Lily".to_string(),
+                    "Lily".to_string(),
                     gender.clone(),
-		    0,
+                    0,
                 ))
             }
             if height >= 0.0 && rng.gen_range(0..64) == 1 {
@@ -800,9 +923,9 @@ impl Chunk {
                     EntityType::Stone,
                     Stats::gen(),
                     Alignment::from(faction.clone()),
-		    "Stone".to_string(),
+                    "Stone".to_string(),
                     gender.clone(),
-		    0,
+                    0,
                 ))
             }
             if height >= 0.0 && rng.gen_range(0..64) == 1 {
@@ -813,9 +936,9 @@ impl Chunk {
                     EntityType::Tulip,
                     Stats::gen(),
                     Alignment::from(faction.clone()),
-		    "Tulip".to_string(),
+                    "Tulip".to_string(),
                     gender.clone(),
-		    0,
+                    0,
                 ))
             }
             tiles.push(Tile::from(
@@ -831,7 +954,9 @@ impl Chunk {
             entities: entities,
             coords: self.coords.clone(),
             index: self.index,
-	    hash: 0,
+            hash: 0,
+            timezone: self.timezone,
+            observed: false,
         }
     }
     pub fn fetch_tile(&self, index: usize) -> &Tile {
@@ -865,10 +990,11 @@ impl News {
 #[derive(Clone, Serialize, Deserialize, Debug, Hash)]
 pub struct World {
     pub chunks: Vec<Chunk>,
+    pub time: u64,
 }
 impl World {
-    pub fn from(chunks: Vec<Chunk>) -> World {
-        World { chunks }
+    pub fn from(chunks: Vec<Chunk>, time: u64) -> World {
+        World { chunks, time }
     }
     pub fn fetch_chunk_mut(&mut self, index: usize) -> &mut Chunk {
         &mut self.chunks[index]
@@ -877,20 +1003,37 @@ impl World {
         &self.chunks[index]
     }
     pub fn fetch_chunk_x_y(&self, x: f32, y: f32) -> &Chunk {
-	let x_int = x as i32;
-	let y_int = y as i32;
-	&self.chunks[(y_int * *WORLD_SIZE as i32 + x_int) as usize]
+        let x_int = x as i32;
+        let y_int = y as i32;
+        &self.chunks[(y_int * *WORLD_SIZE as i32 + x_int) as usize]
+    }
+    pub fn fetch_chunk_x_y_mut(&mut self, x: f32, y: f32) -> &mut Chunk {
+        let x_int = x as i32;
+        let y_int = y as i32;
+        &mut self.chunks[(y_int * *WORLD_SIZE as i32 + x_int) as usize]
     }
     pub fn update_chunk_with_entity(&mut self, mut entity: Entity) {
         let x_int = entity.ccoords.x as i32;
         let y_int = entity.ccoords.y as i32;
-	if x_int < 0 || y_int < 0 || x_int > *WORLD_SIZE as i32 - 1|| y_int > *WORLD_SIZE as i32 - 1{
-	    return
-	}
-	entity.ccoords.x = (entity.coords.x / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32) / HashableF32(1 as f32)).as_i32();
-	entity.ccoords.y = (entity.coords.y / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32) / HashableF32(1 as f32)).as_i32();
+        if x_int < 0
+            || y_int < 0
+            || x_int > *WORLD_SIZE as i32 - 1
+            || y_int > *WORLD_SIZE as i32 - 1
+        {
+            return;
+        }
+        entity.ccoords.x = (entity.coords.x
+            / HashableF32(*TILE_SIZE as f32)
+            / HashableF32(*CHUNK_SIZE as f32)
+            / HashableF32(1 as f32))
+        .as_i32();
+        entity.ccoords.y = (entity.coords.y
+            / HashableF32(*TILE_SIZE as f32)
+            / HashableF32(*CHUNK_SIZE as f32)
+            / HashableF32(1 as f32))
+        .as_i32();
         let chunk = &mut self.chunks[(y_int * *WORLD_SIZE as i32 + x_int) as usize];
-        
+        chunk.observed = true;
         // Try to find an entity with the same ID
         if let Some(existing_entity) = chunk.entities.iter_mut().find(|e| e.index == entity.index) {
             // Update the existing entity
@@ -899,57 +1042,75 @@ impl World {
             // Add the new entity
             chunk.entities.push(entity);
         }
-    }    
-    pub fn resolve(&mut self, step_increment: i32) {
-	let mut added_entities: Arc<Mutex<HashMap<usize, Entity>>> = Arc::new(Mutex::new(HashMap::new()));
-
-	let mut chunks_clone = self.chunks.clone();
-        self.chunks
-            .par_iter_mut()
-            .for_each(|c| {
-		c.resolve(step_increment);
-		for chunk in &chunks_clone {
-		    if chunk.index == c.index {
-			continue;
-		    }
-		    for entity in &mut c.entities {
-			if entity.ccoords == chunk.coords {
-			    if let Some(existing_entity) = chunk.entities.iter().find(|e| e.index == entity.index) {
-				// Update the existing entity
-				//*existing_entity = e.clone();
-			    } else if entity.stats.health > 0 {
-				added_entities.lock().unwrap().insert(c.index, entity.clone());
-				entity.tasks.migrate.1 = true;
-				// Add the new entity
-			    }
-			}
-		    }
-		}
-	    });
-	for (k,mut v) in added_entities.lock().unwrap().clone() {
-	    for mut c in &mut self.chunks {
-		if v.ccoords == c.coords {
-		    c.entities.push(v.clone());
-		}
-	    }
-	}
+    }
+    pub fn resolve(&mut self, delta: f32, step_increment: i32) {
+        self.time += delta as u64;
+        let mut leftover_entities = vec![];
+        self.chunks.iter_mut().for_each(|c| {
+            let los = c.resolve(step_increment);
+            leftover_entities.extend(los);
+            c.observed = false;
+        });
+        for le in &leftover_entities {
+            self.update_chunk_with_entity(le.clone());
+        }
     }
     pub fn resolve_between(&mut self, step_increment: i32) {}
 }
 pub fn worldgen(seed: u32) -> World {
+    let image_path = "data/map/globe.gif";
+    let img = ImageReader::open(image_path)
+        .expect("Failed to open image")
+        .decode()
+        .expect("Failed to decode image");
     let mut chunks: Vec<Chunk> = vec![];
     for c in 0..((*WORLD_SIZE * *WORLD_SIZE) as i32) {
         let x = (c % *WORLD_SIZE as i32) as f32;
         let y = (c / *WORLD_SIZE as i32) as f32;
+        let timezone: u8 = ((*WORLD_SIZE as f32 - x) / 10.0) as u8;
         chunks.push(Chunk::from(
             vec![],
             vec![],
             Coords_i32::from((x as i32, y as i32, 0)),
             c as usize,
-	    0,
+            0,
+            timezone,
         ));
     }
-    chunks.par_iter_mut().for_each(|c| *c = c.gen(seed));
-    let world = World::from(chunks);
+    chunks.par_iter_mut().for_each(|c| *c = c.gen(seed, None));
+    let world = World::from(chunks, 0);
+    world
+}
+pub fn globegen() -> World {
+    let image_path = "data/map/globe.gif";
+    let mut img = ImageReader::open(image_path)
+        .expect("Failed to open image")
+        .decode()
+        .expect("Failed to decode image");
+    img = img.resize_exact(
+        *WORLD_SIZE * *CHUNK_SIZE,
+        *WORLD_SIZE * *CHUNK_SIZE,
+        FilterType::Nearest,
+    );
+    let (width, height) = img.dimensions();
+    println!("Image dimensions: {}x{}", width, height);
+    let mut chunks: Vec<Chunk> = vec![];
+    for c in 0..((*WORLD_SIZE * *WORLD_SIZE) as i32) {
+        let x = (c % *WORLD_SIZE as i32) as f32;
+        let y = (c / *WORLD_SIZE as i32) as f32;
+        let timezone: u8 = ((*WORLD_SIZE as f32 - x) / 10.0) as u8;
+        chunks.push(Chunk::from(
+            vec![],
+            vec![],
+            Coords_i32::from((x as i32, y as i32, 0)),
+            c as usize,
+            0,
+            timezone,
+        ));
+    }
+    chunks
+        .par_iter_mut()
+        .for_each(|c| *c = c.gen(0, Some(&img)));
+    let world = World::from(chunks, 0);
     world
 }

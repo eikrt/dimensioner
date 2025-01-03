@@ -10,6 +10,7 @@ mkShell {
     SDL2_ttf
     SDL2_image
     gnuplot
+    valgrind
   ];
   buildInputs = [
     pkgs.pkg-config

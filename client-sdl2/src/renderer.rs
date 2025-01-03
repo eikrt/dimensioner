@@ -29,6 +29,24 @@ lazy_static! {
     pub static ref WINDOW_HEIGHT: u32 = 360;
     pub static ref DEFAULT_ZOOM: i32 = 1;
     pub static ref CAMERA_STEP: HashableF32 = HashableF32(32.0);
+    static ref PROJ_PLANE_W: u32 = 160;
+    static ref PROJ_PLANE_H: u32 = 90;
+    static ref FOV: f32 = 3.14 / 2.0;
+    static ref PP_DIST: f32 = (*PROJ_PLANE_W as f32 / 2.0) / (*FOV / 2.0).tan();
+    static ref COL_WIDTH: f32 = (*FOV / *PROJ_PLANE_W as f32) as f32;
+}
+#[derive(Debug)]
+struct Pixel {
+    rect: Rect,
+    color: Color,
+}
+impl Pixel {
+    fn new(rect: Rect, color: Color) -> Pixel {
+        Pixel {
+            rect: rect,
+            color: color,
+        }
+    }
 }
 struct InputBuffer {
     ang: f32,
@@ -38,6 +56,8 @@ struct InputBuffer {
     c_pressed: bool,
     r_pressed: bool,
     l_pressed: bool,
+    v_pressed: bool,
+    e_pressed: bool,
     space_pressed: bool,
 }
 
@@ -198,6 +218,102 @@ impl<'a> TileCache<'a> {
         })
     }
 }
+fn shoot_ray(
+    ang: f32,
+    coords: (f32, f32, f32),
+    chunk: &Chunk,
+    camera: &Camera,
+) -> (Option<(f32, f32, f32)>, Option<Color>) {
+    // Calculate new coordinates based on angle
+    let new_coords = (coords.0 + ang.cos(), coords.1 + ang.sin(), coords.2 + 1.0);
+
+    // Check bounds to terminate recursion
+    if coords.0 < 0.0
+        || coords.0 > *PROJ_PLANE_W as f32
+        || coords.1 < 0.0
+        || coords.1 > *PROJ_PLANE_H as f32
+        || coords.2 < 0.0
+        || coords.2 > 8.0
+    {
+        return (None, None);
+    }
+
+    // Collect transformed points from the chunk tiles
+    let mut points = vec![];
+    for tile in &chunk.tiles {
+        // Calculate color based on tile's z-coordinate
+        let color = if tile.coords.z < 0 {
+            Color::RGB(0, 0, 255) // Specific color for negative z
+        } else {
+            Color::RGB(
+                (255.0 - (tile.coords.z as f32 / 10.0) * 255.0).clamp(0.0, 255.0) as u8,
+                (255.0 - (tile.coords.z as f32 / 10.0) * 255.0).clamp(0.0, 255.0) as u8,
+                (255.0 - (tile.coords.z as f32 / 10.0) * 255.0).clamp(0.0, 255.0) as u8,
+            )
+        };
+
+        // Transform tile coordinates to camera space
+        points.push((
+            (
+                (tile.coords.x as f32) * camera.scale_x as f32
+                    + camera.coords.x.as_f32() / *TILE_SIZE as f32,
+                (tile.coords.y as f32) * camera.scale_y as f32
+                    + camera.coords.y.as_f32() / *TILE_SIZE as f32,
+                0 as f32,
+            ),
+            color,
+        ));
+    }
+
+    // Check if the current coordinates hit any tile
+    
+    for (point_coords, point_color) in &points {
+	println!("{:?}, {:?}", point_coords, coords);
+        if (
+            point_coords.0.floor(),
+            point_coords.1.floor(),
+            point_coords.2.floor(),
+        ) == (coords.0.floor(), coords.1.floor(), coords.2.floor())
+        {
+            return (Some(*point_coords), Some(*point_color));
+        }
+    }
+
+    // Recursive call to continue the ray
+    shoot_ray(ang, new_coords, chunk, camera)
+}
+fn render_scene(pixels: &mut Vec<Pixel>, chunk: &Chunk, camera: &Camera) {
+    let col_width_f32 = *COL_WIDTH;
+
+    // Create a thread-safe vector to collect pixels
+    let pixels_par: Vec<Pixel> = (0..*WINDOW_WIDTH)
+        .into_iter()
+        .flat_map(|i| {
+            let mut current_ang_x = i as f32 * col_width_f32;
+            (0..1)
+                .into_iter()
+                .map(move |j| {
+                    let rect = Rect::new(i as i32, j as i32, 50, 360);
+                    let mut color = Color::RGB(0, 0, 0);
+                    let coords = shoot_ray(current_ang_x, (i as f32, 0 as f32, 0.0), chunk, camera);
+                    if coords == (None, None) {
+                        color = Color::RGB(20, 20, 20);
+                    } else {
+                        let c = coords.0.unwrap();
+                        let dist_from_viewer =
+                            ((c.0 - 0.0).powf(2.0) + (c.1 - 0.0).powf(2.0) + (c.2 - 0.0).powf(2.0))
+                                .sqrt();
+                        color = coords.1.unwrap_or_else(|| Color::RGB(50,50,50));
+                    }
+                    Pixel::new(rect, color)
+                })
+                .collect::<Vec<_>>() // Collect results for this column
+        })
+        .collect();
+
+    // Append all pixels to the original pixels vector
+    pixels.extend(pixels_par);
+}
 fn draw_filled_circle(canvas: &mut Canvas<Window>, cx: f32, cy: f32, radius: i32, color: Color) {
     canvas.set_draw_color(color);
 
@@ -259,18 +375,20 @@ fn draw_fog_layer(
 
         // Add random variation to fog alpha
         let mut rng = rand::thread_rng();
-	
-        let alpha_variation: u8 = (dist_f32_i32(&player.coords, &Coords_i32::from((tile.coords.x * *TILE_SIZE as i32, tile.coords.y * *TILE_SIZE as i32, tile.coords.z))) * 1)
-        .try_into()
-        .unwrap_or_else(|_| 255); // Optional noise for fog effect
-        // Set fog color with transparency
-	let c = time_to_color(time);
-        canvas.set_draw_color(Color::RGBA(
-            c.r,
-            c.g,
-            c.b,
-            alpha_variation,
-        ));
+
+        let alpha_variation: u8 = (dist_f32_i32(
+            &player.coords,
+            &Coords_i32::from((
+                tile.coords.x * *TILE_SIZE as i32,
+                tile.coords.y * *TILE_SIZE as i32,
+                tile.coords.z,
+            )),
+        ) * 1)
+            .try_into()
+            .unwrap_or_else(|_| 255); // Optional noise for fog effect
+                                      // Set fog color with transparency
+        let c = time_to_color(time);
+        canvas.set_draw_color(Color::RGBA(c.r, c.g, c.b, alpha_variation));
         // Draw fog rectangle
         let fog_rect = Rect::new(tile_x, tile_y, fog_width, fog_height);
         canvas.fill_rect(fog_rect).unwrap();
@@ -299,8 +417,10 @@ pub fn render_server(
     let mut camera = Camera::new();
     camera.scale_x = (display_mode.w as u32 / *WINDOW_WIDTH) as f32;
     camera.scale_y = (display_mode.h as u32 / *WINDOW_HEIGHT) as f32;
-    camera.coords.x = HashableF32((*TILE_SIZE * *CHUNK_SIZE * *WORLD_SIZE) as f32 * -1.0);
-    camera.coords.y = HashableF32((*TILE_SIZE * *CHUNK_SIZE * *WORLD_SIZE) as f32 * -1.0);
+    camera.coords.x =
+        HashableF32((*TILE_SIZE * *CHUNK_SIZE * *WORLD_SIZE) as f32 * -0.5 * camera.scale_x);
+    camera.coords.y =
+        HashableF32((*TILE_SIZE * *CHUNK_SIZE * *WORLD_SIZE) as f32 * -0.5 * camera.scale_y);
     let ttf_context = sdl2::ttf::init().unwrap();
     let font_path = "fonts/VastShadow-Regular.ttf";
     let font = ttf_context.load_font(font_path, 14).unwrap();
@@ -328,6 +448,8 @@ pub fn render_server(
         c_pressed: false,
         r_pressed: false,
         l_pressed: false,
+        v_pressed: false,
+        e_pressed: false,
         space_pressed: false,
     };
     let mut last_frame_time = Instant::now();
@@ -483,6 +605,12 @@ pub fn render_server(
         25,
         texture_creator.load_texture("res/tiles/water.png").unwrap(),
     );
+    tex_cache.textures.insert(
+        26,
+        texture_creator
+            .load_texture("res/vehicles/car.png")
+            .unwrap(),
+    );
     let mut time = 0.0;
     'main: loop {
         let mouse_util = event_pump.mouse_state();
@@ -555,13 +683,7 @@ pub fn render_server(
                                 camera.coords.x += *CAMERA_STEP
                             }
                         }
-                        Keycode::Right => {
-                            if (camera.coords.x - *CAMERA_STEP).as_f32()
-                                > (*WORLD_SIZE * *CHUNK_SIZE * *TILE_SIZE) as f32 * -1.0
-                            {
-                                camera.coords.x -= *CAMERA_STEP
-                            }
-                        }
+                        Keycode::Right => camera.coords.x -= *CAMERA_STEP,
                         Keycode::Up => {
                             if ((camera.coords.y + *CAMERA_STEP).as_f32() < 0.0) {
                                 camera.coords.y += *CAMERA_STEP
@@ -610,6 +732,12 @@ pub fn render_server(
                         }
                         Keycode::L => {
                             input_buffer.l_pressed = true;
+                        }
+                        Keycode::V => {
+                            input_buffer.v_pressed = true;
+                        }
+                        Keycode::E => {
+                            input_buffer.e_pressed = true;
                         }
                         _ => {}
                     }
@@ -762,6 +890,7 @@ pub fn render_server(
                     EntityType::Shell => i = 7,
                     EntityType::Explosion => i = 8,
                     EntityType::Landmine => i = 10,
+                    EntityType::Car => i = 26,
                     EntityType::Road => {
                         i = 9;
                         let entities_clone = chunk.entities.clone();
@@ -841,7 +970,10 @@ pub fn render_server(
             }
             if let Ok(rm) = rx_client.try_recv() {
                 let mut m = rm.player.clone();
-
+                let linked_entity = chunk
+                    .entities
+                    .iter()
+                    .find(|e| e.linked_entity_id == m.index as u64);
                 player = Some(m.clone());
                 m.ang = HashableF32(input_buffer.ang);
                 if input_buffer.forward {
@@ -893,7 +1025,28 @@ pub fn render_server(
                             HashableF32(input_buffer.traj),
                         ),
                     ));
-                    input_buffer.l_pressed = false;
+                } else if input_buffer.v_pressed {
+                    m.inventory.items[0].1 -= 200;
+                    let _ = sx_client.send(ClientMsg::from(
+                        m.clone(),
+                        ActionContent::from(
+                            ActionType::ConstructCar,
+                            HashableF32(input_buffer.cang),
+                            HashableF32(input_buffer.traj),
+                        ),
+                    ));
+                    input_buffer.v_pressed = false;
+                } else if input_buffer.e_pressed {
+                    m.inventory.items[0].1 -= 0;
+                    let _ = sx_client.send(ClientMsg::from(
+                        m.clone(),
+                        ActionContent::from(
+                            ActionType::Interact,
+                            HashableF32(input_buffer.cang),
+                            HashableF32(input_buffer.traj),
+                        ),
+                    ));
+                    input_buffer.e_pressed = false;
                 } else {
                     let _ = sx_client.send(ClientMsg::from(m.clone(), ActionContent::new()));
                 }
@@ -928,11 +1081,28 @@ pub fn render_server(
                     *TILE_SIZE,
                     *CHUNK_SIZE,
                     220,
-		    time,
+                    time,
                 );
             }
+
+           //  let mut pixels = Vec::new();
+           // // render_scene(&mut pixels, chunk, &camera);
+           //  for p in pixels.iter() {
+           //      canvas.set_draw_color(p.color);
+           //      let ratio_x = 160 / *WINDOW_WIDTH;
+           //      let ratio_y = 144 / *WINDOW_HEIGHT;
+           //      canvas
+           //          .fill_rect(Rect::new(
+           //              (p.rect.x as i32) as i32,
+           //              (p.rect.y as i32) as i32,
+           //              (p.rect.w) as u32,
+           //              (p.rect.h) as u32,
+           //          ))
+           //          .unwrap();
+           //  }
         }
 
+        // "crosshair"
         canvas.set_draw_color(Color::RGBA(255, 255, 255, 100));
         canvas
             .fill_rect(Rect::new(
@@ -1005,7 +1175,6 @@ pub fn render_server(
         )
         .unwrap();
         canvas.present();
-        canvas.set_draw_color(time_to_color(time));
         canvas.clear();
         let _ = sx.send(MainMsg::from(camera.clone(), player.clone(), true));
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
@@ -1016,5 +1185,5 @@ fn time_to_color(time: f32) -> Color {
     let r = ((time / 32.0).sin() * 255.0) as u8;
     let g = ((time / 32.0).sin() * 255.0) as u8;
     let b = ((time / 32.0).sin() * 255.0) as u8;
-    Color::RGBA(r,g,b, 255)
+    Color::RGBA(r, g, b, 255)
 }

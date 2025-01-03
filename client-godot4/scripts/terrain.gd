@@ -11,8 +11,8 @@ var width = 64
 var depth = 64
 # Function to request and parse chunk data
 func fetch_chunk_from_server(x: float, y: float, index: int) -> Dictionary:
-	var net = Net.new()
-	var result = net.fetch_chunk(x, y, index)
+	#var net = Net.new()
+	#var result = net.fetch_chunk(x, y, index)
 	var json = JSON.new()
 	return json.parse_string(result)
 func _ready() -> void:

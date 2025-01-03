@@ -1,9 +1,6 @@
-[gd_scene load_steps=4 format=3 uid="uid://bmsbf0s2icpdc"]
+[gd_scene load_steps=2 format=3 uid="uid://bmsbf0s2icpdc"]
 
-[ext_resource type="Script" path="res://scripts/net.gd" id="1_1dpe8"]
-[ext_resource type="Script" path="res://scripts/terrain.gd" id="2_rcspg"]
-
-[sub_resource type="ArrayMesh" id="ArrayMesh_xy0bn"]
+[ext_resource type="Script" path="res://scripts/net.gd" id="1_cmxbe"]
 
 [node name="Root" type="Node3D"]
 
@@ -11,15 +8,7 @@
 transform = Transform3D(1, 0, 0, 0, 0.368335, 0.929693, 0, -0.929693, 0.368335, 35.0132, 25.0466, 31.9198)
 fov = 90.0
 
-[node name="Net" type="Net" parent="."]
-script = ExtResource("1_1dpe8")
-
 [node name="Terrain" type="Node3D" parent="."]
-
-[node name="Terrain" type="MeshInstance3D" parent="Terrain"]
-mesh = SubResource("ArrayMesh_xy0bn")
-skeleton = NodePath("../..")
-script = ExtResource("2_rcspg")
 
 [node name="SpotLight3D" type="SpotLight3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.258819, 0.965926, 0, -0.965926, 0.258819, 34.8045, 89.0016, 0)
@@ -27,3 +16,6 @@ spot_range = 4096.0
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 123.353, 0)
+
+[node name="Node" type="Node" parent="."]
+script = ExtResource("1_cmxbe")
