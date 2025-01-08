@@ -1,4 +1,4 @@
-use crate::worldgen::{Camera, Entity, Chunk, News, HashableF32};
+use crate::worldgen::{Camera, Entity, Chunk, Coords_i32, News, HashableF32};
 use serde::{Serialize, Deserialize};
 
 #[derive(Clone, Debug)]
@@ -54,8 +54,26 @@ pub struct ClientData {
     pub entity: Entity,
     pub action: ActionContent,
     pub data_type: ClientDataType,
+    pub ccoords: Coords_i32,
 }
-
+impl ClientData {
+    pub fn new() -> ClientData {
+	ClientData {
+	    entity: Entity::gen_player(0,0.0,0.0,0.0),
+	    action: ActionContent::new(),
+	    data_type: ClientDataType::Chunk, 
+	    ccoords: Coords_i32::from((0,0,0)),
+	}
+    }
+    pub fn from(entity: Entity, action: ActionContent, data_type: ClientDataType, ccoords: Coords_i32) -> ClientData {
+	ClientData {
+	    ccoords: ccoords,
+	    entity: entity,
+	    action: action, 
+	    data_type: data_type,
+	}
+    }
+}
 #[derive(Hash, Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub enum ActionType {
     Empty,

@@ -11,6 +11,7 @@ mkShell {
     SDL2_image
     gnuplot
     valgrind
+    ncurses
   ];
   buildInputs = [
     pkgs.pkg-config

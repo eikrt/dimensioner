@@ -1,21 +1,35 @@
-[gd_scene load_steps=2 format=3 uid="uid://bmsbf0s2icpdc"]
+[gd_scene load_steps=5 format=3 uid="uid://bmsbf0s2icpdc"]
 
-[ext_resource type="Script" path="res://scripts/net.gd" id="1_cmxbe"]
+[ext_resource type="Script" path="res://scripts/net/net.gd" id="1_cmxbe"]
+[ext_resource type="PackedScene" uid="uid://5nc5m055qrno" path="res://scenes/world/terrain.tscn" id="2_xjtya"]
+[ext_resource type="PackedScene" uid="uid://crkyikfqkaamm" path="res://scenes/entities/player.tscn" id="3_6jc5j"]
+
+[sub_resource type="Environment" id="Environment_jncix"]
+fog_enabled = true
+fog_light_color = Color(0.616513, 0.552434, 0.222612, 1)
 
 [node name="Root" type="Node3D"]
 
-[node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.368335, 0.929693, 0, -0.929693, 0.368335, 35.0132, 25.0466, 31.9198)
-fov = 90.0
+[node name="Net" type="Net" parent="."]
+script = ExtResource("1_cmxbe")
 
-[node name="Terrain" type="Node3D" parent="."]
-
-[node name="SpotLight3D" type="SpotLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.258819, 0.965926, 0, -0.965926, 0.258819, 34.8045, 89.0016, 0)
-spot_range = 4096.0
+[node name="Terrain" parent="." instance=ExtResource("2_xjtya")]
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 123.353, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 46.0265, 0)
+light_energy = 16.0
+light_volumetric_fog_energy = 16.0
 
-[node name="Node" type="Node" parent="."]
-script = ExtResource("1_cmxbe")
+[node name="Player" parent="." instance=ExtResource("3_6jc5j")]
+transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 0.1, 0, 1.45899, 0)
+floor_stop_on_slope = false
+floor_block_on_wall = false
+move_speed = 2.0
+
+[node name="Camera3D" type="Camera3D" parent="Player"]
+transform = Transform3D(10, 0, 0, 0, 9.88097, -1.53831, 0, 1.53831, 9.88097, 0, 0, 0)
+environment = SubResource("Environment_jncix")
+fov = 90.0
+
+[node name="OmniLight3D" type="OmniLight3D" parent="Player/Camera3D"]
+omni_range = 4096.0

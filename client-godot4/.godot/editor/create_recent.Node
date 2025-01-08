@@ -1,8 +1,12 @@
-Node
-DirectionalLight3D
+CharacterBody3D
+CollisionShape3D
 MeshInstance3D
+OmniLight3D
+DirectionalLight3D
+Net
+Player
+Node
 SpotLight3D
 StaticBody3D
 Node3D
-Player
 Camera3D

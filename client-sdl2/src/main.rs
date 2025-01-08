@@ -2,13 +2,13 @@ use async_std::task;
 use crossbeam::channel::unbounded;
 use dimensioner_client_sdl2::net::send_client_data;
 use dimensioner_client_sdl2::plot::plot;
-use dimensioner_client_sdl2::renderer_opengl::render_server;
+use dimensioner_client_sdl2::renderer_curses::render_server;
 use dimensioner_client_sdl2::util::{
     ActionContent, ActionData, ActionType, ClientData, ClientDataType, ClientMsg, MainMsg,
     RenderMsg,
 };
 use dimensioner_client_sdl2::worldgen::{
-    worldgen, globegen, Camera, Entity, News, CHUNK_SIZE, TILE_SIZE, WORLD_SIZE,
+    globegen, worldgen, Coords_i32, Camera, Entity, News, CHUNK_SIZE, TILE_SIZE, WORLD_SIZE,
 };
 
 use rand::Rng;
@@ -23,6 +23,7 @@ lazy_static! {
     pub static ref PARTITION_SIZE: usize = (*WORLD_SIZE as usize * *WORLD_SIZE as usize) / 16;
     pub static ref VIEW_DISTANCE: usize = 0;
 }
+
 fn main() {
     let (tx, rx) = unbounded();
     let (tx2, rx2): (
@@ -55,8 +56,9 @@ fn main() {
     let random_number = rng.gen_range(0..=100_000);
     let mut player: Arc<Mutex<Entity>> = Arc::new(Mutex::new(Entity::gen_player(
         random_number,
-        (*TILE_SIZE * *CHUNK_SIZE * *WORLD_SIZE / 2) as f32,
-        (*TILE_SIZE * *CHUNK_SIZE * *WORLD_SIZE / 2) as f32,
+        0.0,
+        0.0, //(*TILE_SIZE * *CHUNK_SIZE * *WORLD_SIZE / 2) as f32,
+        //(*TILE_SIZE * *CHUNK_SIZE * *WORLD_SIZE / 2) as f32,
         0.0,
     )));
 
@@ -96,6 +98,8 @@ fn main() {
     let mut y_i = 0;
     let s_clone = state.lock().unwrap().clone();
     let tx4_clone = tx4.clone();
+    let mut c_i = 0;
+    let mut f_c_plus = Coords_i32::from((-1,-2, -4)); 
     thread::spawn(move || loop {
         // Continuously read from the channel until there are no more messages
         let mut latest_message = None;
@@ -120,7 +124,20 @@ fn main() {
                 }
                 None => {}
             };
+	    if f_c_plus.x > 1 {
+		f_c_plus.x = -1;
+		f_c_plus.y += 1;
+	    }
+	    if f_c_plus.y > 1 {
+		f_c_plus.x = -1;
+		f_c_plus.y = -2;
+	    }
+	    let mut fetch_coords = e.ccoords.clone();
+	    f_c_plus.x += 1;
+	    fetch_coords.x += f_c_plus.x;
+	    fetch_coords.y += f_c_plus.y;
             let s = ClientData {
+		ccoords: fetch_coords, 
                 entity: e,
                 action: p.action.clone(),
                 data_type: ClientDataType::Chunk,
@@ -132,46 +149,25 @@ fn main() {
             let result = task::block_on(send_client_data(s));
             match result {
                 Ok(chunk) => {
-                    if let Some(chunk) = chunk {
-                        chunk.entities.clone().into_iter().find(|e| {
-                            if e.index == player_id {
-                                tx6.send(ClientMsg::from(e.clone(), ActionContent::new()));
-                            }
-                            false
-                        });
-
-                        for (k, v) in s_clone.clone().into_iter().enumerate() {
-                            if s_clone.clone().clone()[k].chunk.hash != chunk.hash {
-                                state_clone_clone.lock().unwrap().remove(k);
-                                state_clone_clone
-                                    .lock()
-                                    .unwrap()
-                                    .push(RenderMsg::from(chunk.clone(), chunk.inquire_news()));
-                                println!("Replaced chunk at ({}, {}) with new data.", 0, 0);
-                            }
+                    if let Some(chunks) = chunk {
+                        for c in chunks {
+                            c.entities.clone().into_iter().find(|e| {
+                                if e.index == player_id {
+                                    tx6.send(ClientMsg::from(e.clone(), ActionContent::new()));
+                                }
+                                false
+                            });
+                            state_clone_clone
+                                .lock()
+                                .unwrap()
+                                .push(RenderMsg::from(c.clone(), c.inquire_news()));
                         }
-                        state_clone_clone.lock().unwrap().clear();
-                        state_clone_clone
-                            .lock()
-                            .unwrap()
-                            .push(RenderMsg::from(chunk.clone(), chunk.inquire_news()));
                     }
                 }
                 Err(e) => eprintln!("Error fetching chunk: {}", e),
             };
         }
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
-    });
-    thread::spawn(move || {
-        let mut input = String::new();
-        match io::stdin().read_line(&mut input) {
-            Ok(e) => e,
-            Err(e) => panic!("End..."),
-        };
-        match input.as_str() {
-            "" => "joinks",
-            &_ => todo!(),
-        }
     });
     let mut partition = 0;
     let mut state_clone = Arc::clone(&state);

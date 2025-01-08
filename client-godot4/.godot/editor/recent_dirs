@@ -1,1 +1,8 @@
+res://scripts/entities
+res://scenes/entities
+res://materials/terrain
+res://shaders
+res://scripts/world
+res://scenes/world
+res://scripts/utils
 res://scripts

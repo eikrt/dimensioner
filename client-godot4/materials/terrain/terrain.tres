@@ -1,0 +1,10 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3 uid="uid://dxb64gcsuua5t"]
+
+[ext_resource type="Shader" path="res://scenes/world/terrain.gdshader" id="1_f3hnv"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_f3hnv")
+shader_parameter/yellow_threshold = 100.0
+shader_parameter/green_threshold = 10.0
+shader_parameter/blend_sharpness = 5.0

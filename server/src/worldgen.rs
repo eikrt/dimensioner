@@ -756,7 +756,6 @@ impl Chunk {
                 }
 
                 if entity.ccoords != self.coords {
-		    println!("{:?}, {:?}", entity.ccoords, self.coords);
                     leftover_entities.push(entity.clone());
                     entity.tasks.migrate.1 = true;
                 }
@@ -1093,7 +1092,6 @@ pub fn globegen() -> World {
         FilterType::Nearest,
     );
     let (width, height) = img.dimensions();
-    println!("Image dimensions: {}x{}", width, height);
     let mut chunks: Vec<Chunk> = vec![];
     for c in 0..((*WORLD_SIZE * *WORLD_SIZE) as i32) {
         let x = (c % *WORLD_SIZE as i32) as f32;

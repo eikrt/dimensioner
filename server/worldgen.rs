@@ -581,6 +581,7 @@ impl Entity {
         self.ccoords.y =
             (self.coords.y / HashableF32(*CHUNK_SIZE as f32) / HashableF32(*TILE_SIZE as f32))
                 .as_i32();
+	println!("{:?}", self.ccoords);
         if self.stats.hunger > 0 {
             self.stats.hunger -= 1;
         }
@@ -756,7 +757,6 @@ impl Chunk {
                 }
 
                 if entity.ccoords != self.coords {
-		    println!("{:?}, {:?}", entity.ccoords, self.coords);
                     leftover_entities.push(entity.clone());
                     entity.tasks.migrate.1 = true;
                 }

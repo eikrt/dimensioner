@@ -268,7 +268,6 @@ fn shoot_ray(
     // Check if the current coordinates hit any tile
     
     for (point_coords, point_color) in &points {
-	println!("{:?}, {:?}", point_coords, coords);
         if (
             point_coords.0.floor(),
             point_coords.1.floor(),

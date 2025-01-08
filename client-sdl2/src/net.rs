@@ -9,7 +9,7 @@ use tokio::task;
 use std::sync::Arc;
 
 
-pub async fn send_client_data(client_data: ClientData) -> Result<Option<Chunk>, io::Error> {
+pub async fn send_client_data(client_data: ClientData) -> Result<Option<Vec<Chunk>>, io::Error> {
     // Serialize the ClientData to binary format
     let serialized_data = bincode::serialize(&client_data).expect("Failed to serialize ClientData");
     // Connect to the server
@@ -22,7 +22,7 @@ pub async fn send_client_data(client_data: ClientData) -> Result<Option<Chunk>, 
     let write_task = task::spawn(async move {
         writer.write_all(&serialized_data).await?;
         writer.flush().await?;
-        Ok::<Option<Chunk>, io::Error>(None)
+        Ok::<Option<Vec<Chunk>>, io::Error>(None)
     });
 
     // Spawn a task for reading the response
@@ -34,7 +34,7 @@ pub async fn send_client_data(client_data: ClientData) -> Result<Option<Chunk>, 
                 eprintln!("Server closed the connection.");
             }
             Ok(n) => {
-                let response: Result<Chunk, _> = bincode::deserialize(&buffer[..n]);
+                let response: Result<Vec<Chunk>, _> = bincode::deserialize(&buffer[..n]);
                 match response {
                     Ok(data) => {
                         //println!("Received response: {:?}", data);
@@ -49,7 +49,7 @@ pub async fn send_client_data(client_data: ClientData) -> Result<Option<Chunk>, 
                 eprintln!("Error reading from server: {}", e);
             }
         }
-        Ok::<Option<Chunk>, io::Error>(chunk)
+        Ok::<Option<Vec<Chunk>>, io::Error>(chunk)
     });
 
     // Await both tasks

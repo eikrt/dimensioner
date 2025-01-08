@@ -1,20 +1,20 @@
 use bincode;
+use crossbeam_channel::{unbounded, Receiver, Sender};
 use dimensioner_server::util::RenderMsg;
 use dimensioner_server::util::{ActionData, ActionType, ClientData, ClientDataType};
 use dimensioner_server::worldgen::*;
 use lazy_static::lazy_static;
 use rand::rngs::StdRng;
-use rand::{SeedableRng, Rng};
+use rand::{Rng, SeedableRng};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::convert::TryInto;
+use std::io::{self, Read, Write};
 use std::sync::{Arc, Mutex};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task;
 use tokio::time::{sleep, Duration};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use crossbeam_channel::{unbounded, Sender, Receiver};
-use std::io::{self, Write, Read};
-use std::convert::TryInto;
 
 lazy_static! {
     pub static ref PARTITION_SIZE: usize = (*WORLD_SIZE as usize * *WORLD_SIZE as usize) / 16;
@@ -24,21 +24,15 @@ lazy_static! {
 async fn main() {
     // Create a broadcast channel
     let (tx, _rx) = unbounded();
-    let (tx_c, mut rx_c): (
-        Sender<ClientData>,
-        Receiver<ClientData>,
-    ) = unbounded();
-    let (tx_c_a, mut rx_c_a): (
-        Sender<ClientData>,
-        Receiver<ClientData>,
-    ) = unbounded();
+    let (tx_c, mut rx_c): (Sender<ClientData>, Receiver<ClientData>) = unbounded();
+    let (tx_c_a, mut rx_c_a): (Sender<ClientData>, Receiver<ClientData>) = unbounded();
 
     let mut worlds = Arc::new(Mutex::new(vec![]));
     let mut rng = rand::thread_rng();
     for _ in 0..1 {
         let seed = rng.gen_range(0..1000);
         //worlds.push(worldgen(seed));
-	worlds.lock().unwrap().push(globegen());
+        worlds.lock().unwrap().push(worldgen(0));
     }
 
     let mut step_increment = 1;
@@ -49,12 +43,18 @@ async fn main() {
         loop {
             if let Ok(o) = rx_c_a.try_recv() {
                 match o.entity.current_action {
-                    ActionType::Empty => {},
-		    ActionType::Refresh => {},
+                    ActionType::Empty => {}
+                    ActionType::Refresh => {}
                     ActionType::ConstructCannon => {
-			let mut coords = Coords_f32::new();
-			coords.x = HashableF32((o.entity.coords.x.as_f32() / *TILE_SIZE as f32).floor() * *TILE_SIZE as f32);
-			coords.y = HashableF32((o.entity.coords.y.as_f32() / *TILE_SIZE as f32).floor() * *TILE_SIZE as f32);
+                        let mut coords = Coords_f32::new();
+                        coords.x = HashableF32(
+                            (o.entity.coords.x.as_f32() / *TILE_SIZE as f32).floor()
+                                * *TILE_SIZE as f32,
+                        );
+                        coords.y = HashableF32(
+                            (o.entity.coords.y.as_f32() / *TILE_SIZE as f32).floor()
+                                * *TILE_SIZE as f32,
+                        );
                         let mut entity = Entity::from(
                             rng.gen_range(0..1000) as usize,
                             coords,
@@ -66,13 +66,19 @@ async fn main() {
                             Gender::Other,
                             0,
                         );
-			entity.ang = o.action.ang;
+                        entity.ang = o.action.ang;
                         worlds.lock().unwrap()[0].update_chunk_with_entity(entity);
-                    },
+                    }
                     ActionType::ConstructRoad => {
-			let mut coords = Coords_f32::new();
-			coords.x = HashableF32((o.entity.coords.x.as_f32() / *TILE_SIZE as f32).floor() * *TILE_SIZE as f32);
-			coords.y = HashableF32((o.entity.coords.y.as_f32() / *TILE_SIZE as f32).floor() * *TILE_SIZE as f32);
+                        let mut coords = Coords_f32::new();
+                        coords.x = HashableF32(
+                            (o.entity.coords.x.as_f32() / *TILE_SIZE as f32).floor()
+                                * *TILE_SIZE as f32,
+                        );
+                        coords.y = HashableF32(
+                            (o.entity.coords.y.as_f32() / *TILE_SIZE as f32).floor()
+                                * *TILE_SIZE as f32,
+                        );
                         let mut entity = Entity::from(
                             rng.gen_range(0..1000) as usize,
                             coords,
@@ -84,13 +90,19 @@ async fn main() {
                             Gender::Other,
                             0,
                         );
-			entity.ang = o.action.ang;
+                        entity.ang = o.action.ang;
                         worlds.lock().unwrap()[0].update_chunk_with_entity(entity);
-                    },
+                    }
                     ActionType::ConstructLandmine => {
-			let mut coords = Coords_f32::new();
-			coords.x = HashableF32((o.entity.coords.x.as_f32() / *TILE_SIZE as f32).floor() * *TILE_SIZE as f32);
-			coords.y = HashableF32((o.entity.coords.y.as_f32() / *TILE_SIZE as f32).floor() * *TILE_SIZE as f32);
+                        let mut coords = Coords_f32::new();
+                        coords.x = HashableF32(
+                            (o.entity.coords.x.as_f32() / *TILE_SIZE as f32).floor()
+                                * *TILE_SIZE as f32,
+                        );
+                        coords.y = HashableF32(
+                            (o.entity.coords.y.as_f32() / *TILE_SIZE as f32).floor()
+                                * *TILE_SIZE as f32,
+                        );
                         let mut entity = Entity::from(
                             rng.gen_range(0..1000) as usize,
                             coords,
@@ -102,58 +114,115 @@ async fn main() {
                             Gender::Other,
                             0,
                         );
-			entity.ang = o.action.ang;
+                        entity.ang = o.action.ang;
                         worlds.lock().unwrap()[0].update_chunk_with_entity(entity);
-                    },
+                    }
                     ActionType::ConstructShell => {
-			let mut coords = Coords_f32::new();
-			coords.x = HashableF32((o.entity.coords.x.as_f32() / *TILE_SIZE as f32).floor() * *TILE_SIZE as f32);
-			coords.y = HashableF32((o.entity.coords.y.as_f32() / *TILE_SIZE as f32).floor() * *TILE_SIZE as f32);
-			let mut entity = Entity::gen_shell(rng.gen_range(0..1000), coords.x.as_f32(),coords.y.as_f32(), coords.z.as_f32());
-			entity.traj = entity.traj;
-			entity.vel.x = HashableF32(o.action.ang.as_f32().sin() * 1.0) * HashableF32(1.0);
-			entity.vel.y = HashableF32(-o.action.ang.as_f32().cos() * 1.0) * HashableF32(1.0);
-			entity.vel.z = HashableF32(o.action.traj.as_f32().cos() * 1.0) * HashableF32(0.5);
-			entity.ang = o.action.ang;
+                        let mut coords = Coords_f32::new();
+                        coords.x = HashableF32(
+                            (o.entity.coords.x.as_f32() / *TILE_SIZE as f32).floor()
+                                * *TILE_SIZE as f32,
+                        );
+                        coords.y = HashableF32(
+                            (o.entity.coords.y.as_f32() / *TILE_SIZE as f32).floor()
+                                * *TILE_SIZE as f32,
+                        );
+                        let mut entity = Entity::gen_shell(
+                            rng.gen_range(0..1000),
+                            coords.x.as_f32(),
+                            coords.y.as_f32(),
+                            coords.z.as_f32(),
+                        );
+                        entity.traj = entity.traj;
+                        entity.vel.x =
+                            HashableF32(o.action.ang.as_f32().sin() * 1.0) * HashableF32(1.0);
+                        entity.vel.y =
+                            HashableF32(-o.action.ang.as_f32().cos() * 1.0) * HashableF32(1.0);
+                        entity.vel.z =
+                            HashableF32(o.action.traj.as_f32().cos() * 1.0) * HashableF32(0.5);
+                        entity.ang = o.action.ang;
                         worlds.lock().unwrap()[0].update_chunk_with_entity(entity);
-                    },
+                    }
                     ActionType::ConstructCar => {
-			let mut coords = Coords_f32::new();
-			coords.x = HashableF32((o.entity.coords.x.as_f32() / *TILE_SIZE as f32).floor() * *TILE_SIZE as f32);
-			coords.y = HashableF32((o.entity.coords.y.as_f32() / *TILE_SIZE as f32).floor() * *TILE_SIZE as f32);
-			let mut entity = Entity::gen_car(rng.gen_range(0..1000), coords.x.as_f32(),coords.y.as_f32(), coords.z.as_f32());
-			entity.traj = entity.traj;
-			entity.vel.x = HashableF32(o.action.ang.as_f32().sin() * 1.0) * HashableF32(1.0);
-			entity.vel.y = HashableF32(-o.action.ang.as_f32().cos() * 1.0) * HashableF32(1.0);
-			entity.vel.z = HashableF32(o.action.traj.as_f32().cos() * 1.0) * HashableF32(0.5);
-			entity.ang = o.action.ang;
+                        let mut coords = Coords_f32::new();
+                        coords.x = HashableF32(
+                            (o.entity.coords.x.as_f32() / *TILE_SIZE as f32).floor()
+                                * *TILE_SIZE as f32,
+                        );
+                        coords.y = HashableF32(
+                            (o.entity.coords.y.as_f32() / *TILE_SIZE as f32).floor()
+                                * *TILE_SIZE as f32,
+                        );
+                        let mut entity = Entity::gen_car(
+                            rng.gen_range(0..1000),
+                            coords.x.as_f32(),
+                            coords.y.as_f32(),
+                            coords.z.as_f32(),
+                        );
+                        entity.traj = entity.traj;
+                        entity.vel.x =
+                            HashableF32(o.action.ang.as_f32().sin() * 1.0) * HashableF32(1.0);
+                        entity.vel.y =
+                            HashableF32(-o.action.ang.as_f32().cos() * 1.0) * HashableF32(1.0);
+                        entity.vel.z =
+                            HashableF32(o.action.traj.as_f32().cos() * 1.0) * HashableF32(0.5);
+                        entity.ang = o.action.ang;
                         worlds.lock().unwrap()[0].update_chunk_with_entity(entity);
                     }
                     ActionType::Interact => {
-			let mut coords = Coords_f32::new();
-			coords.x = HashableF32((o.entity.coords.x.as_f32() / *TILE_SIZE as f32).floor() * *TILE_SIZE as f32);
-			coords.y = HashableF32((o.entity.coords.y.as_f32() / *TILE_SIZE as f32).floor() * *TILE_SIZE as f32);
-			for mut e in &mut worlds.lock().unwrap()[0].fetch_chunk_x_y_mut(o.entity.ccoords.x as f32, o.entity.ccoords.y as f32).entities {
-			    let mut coords_e = Coords_f32::new();
-			    coords_e.x = HashableF32((e.coords.x.as_f32() / *TILE_SIZE as f32).floor() * *TILE_SIZE as f32);
-			    coords_e.y = HashableF32((e.coords.y.as_f32() / *TILE_SIZE as f32).floor() * *TILE_SIZE as f32);
-			    if coords.x == coords_e.x && coords.y == coords_e.y {
-				e.linked_entity_id = o.entity.index as u64;
-			    }
-			}
+                        let mut coords = Coords_f32::new();
+                        coords.x = HashableF32(
+                            (o.entity.coords.x.as_f32() / *TILE_SIZE as f32).floor()
+                                * *TILE_SIZE as f32,
+                        );
+                        coords.y = HashableF32(
+                            (o.entity.coords.y.as_f32() / *TILE_SIZE as f32).floor()
+                                * *TILE_SIZE as f32,
+                        );
+                        for mut e in &mut worlds.lock().unwrap()[0]
+                            .fetch_chunk_x_y_mut(
+                                o.entity.ccoords.x as f32,
+                                o.entity.ccoords.y as f32,
+                            )
+                            .entities
+                        {
+                            let mut coords_e = Coords_f32::new();
+                            coords_e.x = HashableF32(
+                                (e.coords.x.as_f32() / *TILE_SIZE as f32).floor()
+                                    * *TILE_SIZE as f32,
+                            );
+                            coords_e.y = HashableF32(
+                                (e.coords.y.as_f32() / *TILE_SIZE as f32).floor()
+                                    * *TILE_SIZE as f32,
+                            );
+                            if coords.x == coords_e.x && coords.y == coords_e.y {
+                                e.linked_entity_id = o.entity.index as u64;
+                            }
+                        }
                     }
                 }
             }
 
-            worlds.lock().unwrap().par_iter_mut().for_each(|c| c.resolve(10.0, step_increment));
-            worlds.lock().unwrap().par_iter_mut().for_each(|c| c.resolve_between(step_increment));
+            worlds
+                .lock()
+                .unwrap()
+                .par_iter_mut()
+                .for_each(|c| c.resolve(10.0, step_increment));
+            worlds
+                .lock()
+                .unwrap()
+                .par_iter_mut()
+                .for_each(|c| c.resolve_between(step_increment));
 
             if let Ok(o) = rx_c.try_recv() {
-		for mut e in &mut worlds.lock().unwrap()[0].fetch_chunk_x_y_mut(o.entity.ccoords.x as f32, o.entity.ccoords.y as f32).entities {
-		    if e.linked_entity_id as u64 == o.entity.index as u64 {
-			e.coords = o.entity.coords.clone();
-		    }
-		}
+                for mut e in &mut worlds.lock().unwrap()[0]
+                    .fetch_chunk_x_y_mut(o.entity.ccoords.x as f32, o.entity.ccoords.y as f32)
+                    .entities
+                {
+                    if e.linked_entity_id as u64 == o.entity.index as u64 {
+                        e.coords = o.entity.coords.clone();
+                    }
+                }
                 worlds.lock().unwrap()[0].update_chunk_with_entity(o.entity);
             }
             //let worlds_clone = worlds.clone();
@@ -190,50 +259,65 @@ async fn handle_connection(
 
     loop {
         let read_result = stream.read(&mut buffer).await;
-	let mut result_client_data: Option<ClientData> = None;
+        let mut result_client_data: Option<ClientData> = None;
         match read_result {
             Ok(0) => break, // Connection closed
             Ok(n) => {
                 // Deserialize the received data
                 let incoming_data: Result<ClientData, _> = bincode::deserialize(&buffer[..n]);
+
                 if let Ok(client_data) = incoming_data {
-		    result_client_data = Some(client_data.clone());
+                    result_client_data = Some(client_data.clone());
                     let _ = tx_c.send(client_data.clone());
                     let _ = tx_c_a.send(client_data);
                 } else if let Ok(action_data) = bincode::deserialize(&buffer[..n]) {
                     let _ = tx_c_a.send(action_data);
-                }
-		else {
-		    let client_data_error = bincode::deserialize::<ClientData>(&buffer[..n]).err();
-		    let action_data_error = bincode::deserialize::<ActionData>(&buffer[..n]).err();
-		    eprintln!(
+                } else {
+                    let client_data_error = bincode::deserialize::<ClientData>(&buffer[..n]).err();
+                    let action_data_error = bincode::deserialize::<ActionData>(&buffer[..n]).err();
+                    eprintln!(
 			"Failed to parse received data:\n - Raw bytes: {:?}\n - ClientData error: {:?}\n - ActionData error: {:?}",
 			&buffer[..n],
 			client_data_error,
 			action_data_error,
 		    );
-		}
-		
+                }
+
                 // Send back a response with the current world state
                 if let Ok(worlds) = rx.recv() {
-		    let c = result_client_data.unwrap();
-		    if c.entity.ccoords.x as f32 >= 0.0 && c.entity.ccoords.y as f32 >= 0.0 && (c.entity.ccoords.x as f32 ) < (*WORLD_SIZE as f32) && (c.entity.ccoords.y as f32 ) < (*WORLD_SIZE as f32) {
-			match c.data_type {
-			    ClientDataType::Chunk => {
-				let serialized_worlds = bincode::serialize(&worlds.lock().unwrap()[0].fetch_chunk_x_y(c.entity.ccoords.x as f32, c.entity.ccoords.y as f32 )).unwrap();
-				let _ = stream.write_all(&serialized_worlds).await;
-			    },
-			    ClientDataType::Refresh => {
-				let serialized_worlds = bincode::serialize(&worlds.lock().unwrap()[0].fetch_chunk_x_y(c.entity.ccoords.x as f32, c.entity.ccoords.y as f32 )).unwrap();
-				let _ = stream.write_all(&serialized_worlds).await;
-			    }
-			}
-		    }
-		    else {
-
-			let serialized_worlds = bincode::serialize(&worlds.lock().unwrap()[0].fetch_chunk_x_y(0.0, 0.0)).unwrap();
-			let _ = stream.write_all(&serialized_worlds).await;
-		    }
+                    let c = result_client_data.unwrap();
+                    if c.entity.ccoords.x as f32 >= 0.0
+                        && c.entity.ccoords.y as f32 >= 0.0
+                        && (c.entity.ccoords.x as f32) < (*WORLD_SIZE as f32)
+                        && (c.entity.ccoords.y as f32) < (*WORLD_SIZE as f32)
+                    {
+                        match c.data_type {
+                            ClientDataType::Chunk | ClientDataType::Refresh => {
+				let x = c.ccoords.x;
+				let y = c.ccoords.y;
+                                let mut chunks: Vec<Chunk> = Vec::new();
+                                if x >= 0
+                                    && y >= 0
+                                    && (x as f32) < (*WORLD_SIZE as f32)
+                                    && (y as f32) < (*WORLD_SIZE as f32)
+                                {
+                                    chunks.push(
+                                        worlds.lock().unwrap()[0]
+                                            .fetch_chunk_x_y(x as f32, y as f32)
+                                            .clone(),
+                                    );
+                                }
+                                let serialized_chunks = bincode::serialize(&chunks).unwrap();
+                                let _ = stream.write_all(&serialized_chunks).await;
+                            }
+                        }
+                    } else {
+                        // Fallback to sending a default chunk
+                        let mut chunks = Vec::new();
+                        chunks.push(worlds.lock().unwrap()[0].fetch_chunk_x_y(0.0, 0.0).clone());
+                        let serialized_chunks = bincode::serialize(&chunks).unwrap();
+                        let _ = stream.write_all(&serialized_chunks).await;
+                    }
                 }
             }
             Err(e) => {

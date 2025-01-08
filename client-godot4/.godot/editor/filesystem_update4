@@ -1,3 +1,6 @@
 res://scenes/root.tscn
+res://scenes/world/terrain.gdshader
+res://materials/terrain/terrain.tres
 res://shaders/terrain_1.gdshader
-res://scripts/net.gd
+res://scenes/world/terrain.tscn
+res://scenes/entities/player.tscn
