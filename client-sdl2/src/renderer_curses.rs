@@ -2,8 +2,8 @@ use crate::math::{dist_f32_i32, lerp};
 use crate::ui::*;
 use crate::util::{ActionContent, ActionType, ClientMsg, MainMsg, RenderMsg};
 use crate::worldgen::{
-    Camera, Chunk, Coords_f32, Coords_i32, Entity, EntityType, Faction, HashableF32, Tile,
-    CHUNK_SIZE, TILE_SIZE, WORLD_SIZE,
+    Camera, Chunk, Class, Coords_f32, Coords_i32, DialogueTree, Entity, EntityType, Faction,
+    HashableF32, Stats, Tile, TileType, CHUNK_SIZE, TILE_SIZE, WORLD_SIZE,
 };
 use crossbeam::channel::unbounded;
 use lazy_static::lazy_static;
@@ -46,10 +46,13 @@ pub fn render_server(
     rx_client: &crossbeam::channel::Receiver<ClientMsg>,
 ) {
     let mut vicinity_box = VicinityBox::new();
-    let display_index = 0; // Primary display is typically index 0
     let mut camera = Camera::new();
     camera.coords.x = HashableF32(40.0 * *TILE_SIZE as f32);
     camera.coords.y = HashableF32(12.0 * *TILE_SIZE as f32);
+    /*camera.coords.x =
+        HashableF32((*TILE_SIZE * *CHUNK_SIZE * *WORLD_SIZE / 2 - *WINDOW_WIDTH as u32 / 2 * *TILE_SIZE as u32) as f32);
+    camera.coords.y =
+        HashableF32((*TILE_SIZE * *CHUNK_SIZE * *WORLD_SIZE / 2 - *WINDOW_HEIGHT as u32 / 2 * *TILE_SIZE as u32) as f32);*/
     let mut last_frame_time = Instant::now();
     let mut r: Option<Vec<RenderMsg>> = None;
     let mut current_chunks: Vec<Chunk> = vec![];
@@ -58,7 +61,6 @@ pub fn render_server(
     let mut ui_state_tiles: HashMap<i32, Tile> = HashMap::new();
     let mut time = 0.0;
     let window = initscr();
-    window.nodelay(true);
     window.keypad(true); // Enable function and arrow keys
     window.refresh();
     start_color(); // Enable color mode
@@ -67,13 +69,130 @@ pub fn render_server(
 
     // Initialize color pairs
     init_pair(1, COLOR_WHITE, COLOR_BLUE); // Blue tile
-    init_pair(2, COLOR_WHITE, COLOR_GREEN); // Green tile
-    init_pair(3, COLOR_BLACK, COLOR_GREEN); // Green tile
+    init_pair(2, COLOR_WHITE, COLOR_BLACK); // Green tile
+    init_pair(3, COLOR_BLACK, COLOR_WHITE); // Green tile
     init_pair(4, COLOR_BLACK, COLOR_YELLOW); // Green tile
     init_pair(5, COLOR_WHITE, COLOR_BLACK); // Green tile
+    init_pair(6, COLOR_WHITE, COLOR_YELLOW); // Green tile
+    init_pair(7, COLOR_WHITE, COLOR_GREEN); // Green tile
 
     let mut highlighted_entity: Option<Entity> = None;
     let mut highlighted_tile: Option<Tile> = None;
+    let mut character_menu_show = false;
+    let mut dialogue = false;
+    let mut current_dialogue_tree: Option<DialogueTree> = None; 
+    let mut character_menu_nodes = vec!["Stats", "Done"];
+    loop {
+        window.mvaddstr(0, 0, "Wanderers of Planet E");
+        window.refresh();
+        match window.getch() {
+            Some(Input::Character('q')) => {
+                // Quit the application
+                break;
+            }
+            Some(Input::Character(c)) => {
+                break;
+            }
+            Some(input) => {}
+            None => (),
+        }
+    }
+    window.clear();
+
+    let classes = vec![
+        Class::Detective,
+        Class::Wanderer,
+        Class::Chemist,
+        Class::Businessman,
+        Class::Engineer,
+    ];
+    let mut stats = Stats::new();
+    let mut name = "".to_string();
+    let mut chosen_class = Class::Detective;
+    let mut selected_index = 0;
+    loop {
+        window.clear();
+        window.mvaddstr(0, 0, "Character Creation");
+        window.mvaddstr(1, 0, "Select Your Class:");
+
+        // Display classes and highlight the selected one
+        for (i, class) in classes.iter().enumerate() {
+            if i == selected_index {
+                window.mvaddstr(2 + i as i32, 0, &format!("> {:?}", class));
+                chosen_class = class.clone();
+            } else {
+                window.mvaddstr(2 + i as i32, 0, &format!("  {:?}", class));
+            }
+        }
+
+        // Instruction to set the character name
+        window.mvaddstr(
+            2 + classes.len() as i32,
+            0,
+            "Press 'n' to enter your character name",
+        );
+
+        window.refresh();
+
+        match window.getch() {
+            Some(Input::Character('q')) => {
+                // Quit the application
+                break;
+            }
+            Some(Input::KeyUp) => {
+                if selected_index > 0 {
+                    selected_index -= 1;
+                }
+            }
+            Some(Input::KeyDown) => {
+                if selected_index < classes.len() - 1 {
+                    selected_index += 1;
+                }
+            }
+            Some(Input::Character('n')) => {
+                // Enter the character name
+                window.clear();
+                window.mvaddstr(0, 0, "Enter your character's name:");
+                window.refresh();
+
+                let mut input_name = String::new();
+                loop {
+                    match window.getch() {
+                        Some(Input::Character(c)) if c != '\n' => {
+                            input_name.push(c);
+                            window.mvaddstr(1, 0, &input_name);
+                            window.refresh();
+                        }
+                        Some(Input::Character('\n')) => {
+                            // Confirm name entry
+                            if !input_name.is_empty() {
+                                name = input_name.clone();
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            Some(Input::Character('\n')) => {
+                // Confirm the selection
+                window.clear();
+                stats = Stats::gen_from_class(&chosen_class);
+                if name.is_empty() {
+                    name = "John Doe".to_string(); // Default name if none provided
+                }
+                window.mvaddstr(0, 0, &name);
+                window.mvaddstr(1, 0, format!("{:?}", &chosen_class));
+                window.mvaddstr(2, 0, stats.as_string());
+                window.refresh();
+                window.getch(); // Wait for user input before exiting
+                selected_index = 0;
+                break;
+            }
+            _ => {}
+        }
+    }
+    window.nodelay(true);
     'main: loop {
         let now = Instant::now();
         let delta_time = now.duration_since(last_frame_time);
@@ -103,18 +222,60 @@ pub fn render_server(
                 current_chunks.push(c.chunk.clone());
             }
         }
-
         for chunk in &current_chunks {
             for (i, t) in chunk.tiles.iter().enumerate() {
-                if t.coords.z < 0 {
-                    window.attron(COLOR_PAIR(1));
-                } else {
-                    window.attron(COLOR_PAIR(2));
+                let mut s = " ";
+                match t.ttype {
+                    TileType::Water => {
+                        window.attron(COLOR_PAIR(1));
+                        s = "~";
+                    }
+
+                    TileType::Sand => {
+                        window.attron(COLOR_PAIR(6));
+                        s = "~";
+                    }
+                    TileType::Grass => {
+                        window.attron(COLOR_PAIR(7));
+                        s = ".";
+                    }
+                    TileType::StoneSand => {
+                        window.attron(COLOR_PAIR(6));
+                        s = ":";
+                    }
+                    TileType::FarmLand => {
+                        window.attron(COLOR_PAIR(6));
+                        s = ":";
+                    }
+                    TileType::WetLand => {
+                        window.attron(COLOR_PAIR(2));
+                        s = "~";
+                    }
+                    TileType::Asphalt => {
+                        window.attron(COLOR_PAIR(6));
+                        s = "[";
+                    }
+                    TileType::Salt => {
+                        window.attron(COLOR_PAIR(6));
+                        s = "~";
+                    }
+                    TileType::Wood => {
+                        window.attron(COLOR_PAIR(6));
+                        s = "-";
+                    }
+                    TileType::Concrete => {
+                        window.attron(COLOR_PAIR(3));
+                        s = "-";
+                    }
+                    TileType::Granite => {
+                        window.attron(COLOR_PAIR(6));
+                        s = "8";
+                    }
                 }
                 window.mvaddstr(
                     t.coords.y + camera.coords.y.as_i32() / *TILE_SIZE as i32,
                     (t.coords.x + camera.coords.x.as_i32() / *TILE_SIZE as i32),
-                    " ",
+                    s,
                 );
 
                 if t.coords.x
@@ -139,7 +300,7 @@ pub fn render_server(
                         + camera.coords.y.as_i32() / *TILE_SIZE as i32,
                     e.coords.x.as_i32() / *TILE_SIZE as i32
                         + camera.coords.x.as_i32() / *TILE_SIZE as i32,
-                    "e",
+                    format!("{:?}", e.etype)[0..1].to_string(),
                 );
                 if e.coords.x.as_i32() == vicinity_box.coords.x.as_i32() - camera.coords.x.as_i32()
                     && e.coords.y.as_i32()
@@ -154,23 +315,52 @@ pub fn render_server(
             for j in 0..(*HUD_WIDTH) {
                 window.attron(COLOR_PAIR(5));
                 window.mvaddch(i, j, ' ');
+                if j == *HUD_WIDTH - 1 {
+                    window.mvaddch(i, j, '|');
+                }
             }
         }
-        for i in 0..(*HUD_HEIGHT) {
-            for j in (*WINDOW_WIDTH - *HUD_WIDTH)..(*HUD_HEIGHT) {
+        /*for i in 0..(*HUD_HEIGHT) {
+            for j in (*WINDOW_WIDTH - *HUD_WIDTH)..(*HUD_WIDTH) {
                 window.attron(COLOR_PAIR(5));
                 window.mvaddch(i, j, ' ');
             }
-        }
+        }*/
+
         if let Some(ref mut highlighted_entity) = highlighted_entity {
             window.attron(COLOR_PAIR(5));
             window.mvaddstr(0, 0, &highlighted_entity.get_sheet());
         }
         if let Some(ref mut highlighted_tile) = highlighted_tile {
             window.attron(COLOR_PAIR(5));
-            window.mvaddstr(8, 0, format!("{:?}", &highlighted_tile.get_sheet()));
+            window.mvaddstr(4, 0, format!("{}", &highlighted_tile.get_sheet()));
         }
+        for i in (0)..(*HUD_WIDTH) {
+            window.mvaddstr(*WINDOW_HEIGHT / 2, i, "–");
+        }
+        if let Some(ref mut player) = player {
+            window.mvaddstr(*WINDOW_HEIGHT / 2 + 1, 0, &player.name);
+            window.mvaddstr(*WINDOW_HEIGHT / 2 + 2, 0, format!("{:?}", player.class));
+            window.mvaddstr(*WINDOW_HEIGHT / 2 + 3, 0, format!("{:?}", player.etype));
+            window.mvaddstr(
+                *WINDOW_HEIGHT / 2 + 4,
+                0,
+                format!("HP: {:?}", player.stats.health),
+            );
+            window.mvaddstr(
+                *WINDOW_HEIGHT / 2 + 5,
+                0,
+                format!("XP: {:?}", player.experience),
+            );
+            window.mvaddstr(
+                *WINDOW_HEIGHT / 2 + 6,
+                0,
+                format!("Level: {:?}", player.level),
+            );
+        }
+        window.mvaddstr(*WINDOW_HEIGHT - 4, 0, get_time_as_string());
         if let Ok(rm) = rx_client.recv() {
+            window.refresh();
             let mut m = rm.player.clone();
             window.attron(COLOR_PAIR(3));
             window.mvaddstr(
@@ -186,7 +376,11 @@ pub fn render_server(
                 "X",
             );
             player = Some(m.clone());
-
+            if let Some(ref mut player) = player {
+                player.stats = stats.clone();
+                player.class = chosen_class.clone();
+                player.name = name.clone();
+            }
             match window.getch() {
                 Some(Input::Character('q')) => {
                     // Quit the application
@@ -214,18 +408,140 @@ pub fn render_server(
                         vicinity_box.coords.y += HashableF32(*TILE_SIZE as f32);
                     } else if c == 'l' {
                         vicinity_box.coords.x += HashableF32(*TILE_SIZE as f32);
+                    } else if c == 'm' {
+                        character_menu_show = true;
+                    } else if c == 'e' {
+                        if let Some(ref mut highlighted_entity) = highlighted_entity {
+                            if highlighted_entity.etype == EntityType::Human {
+				current_dialogue_tree = highlighted_entity.dialogue.clone();
+                                dialogue = true;
+                            }
+                        }
                     }
                 }
                 Some(input) => {}
                 None => (),
             }
+            if dialogue {
+                window.nodelay(false);
+		if let Some(ref current_dialogue_tree) = current_dialogue_tree {
+                    parse_dialogue(&window, &current_dialogue_tree);
+		}
+                dialogue = false;
+            }
+            if character_menu_show {
+                window.nodelay(false);
+                loop {
+                    window.clear();
+                    window.mvaddstr(0, 0, "Character Menu");
+
+                    for (i, n) in character_menu_nodes.iter().enumerate() {
+                        if i == selected_index {
+                            window.mvaddstr(2 + i as i32, 0, &format!("> {}", n));
+                        } else {
+                            window.mvaddstr(2 + i as i32, 0, &format!("  {}", n));
+                        }
+                    }
+                    // Display classes and highlight the selected one
+                    // Instruction to set the character name
+                    window.refresh();
+
+                    match window.getch() {
+                        Some(Input::Character('q')) => {
+                            break;
+                        }
+                        Some(Input::KeyUp) => {
+                            if selected_index > 0 {
+                                selected_index -= 1;
+                            }
+                        }
+                        Some(Input::KeyDown) => {
+                            if selected_index < classes.len() - 1 {
+                                selected_index += 1;
+                            }
+                        }
+                        Some(Input::Character('\n')) => {
+                            // Confirm the selection
+                            if selected_index == 0 {
+                                window.clear();
+                                stats = Stats::gen_from_class(&chosen_class);
+                                if name.is_empty() {
+                                    name = "John Doe".to_string(); // Default name if none provided
+                                }
+                                window.mvaddstr(0, 0, &name);
+                                window.mvaddstr(1, 0, format!("{:?}", &chosen_class));
+                                window.mvaddstr(2, 0, stats.as_string());
+                                window.refresh();
+                                window.getch(); // Wait for user input before exiting
+                                selected_index = 0;
+                            } else {
+                                character_menu_show = false;
+                                window.nodelay(true);
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
             let _ = sx_client.send(ClientMsg::from(m.clone(), ActionContent::new()));
         } else if let Some(ref player) = player {
             let _ = sx_client.send(ClientMsg::from(player.clone(), ActionContent::new()));
         }
 
-        window.refresh();
         let _ = sx.send(MainMsg::from(camera.clone(), player.clone(), true));
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
+}
+
+fn parse_dialogue(window: &Window, current_dialogue_tree: &DialogueTree) {
+    let mut selected_index = 0;
+    loop {
+        window.clear();
+        window.mvaddstr(0, 0, "Dialogue Menu");
+        for (i, n) in current_dialogue_tree.nodes.iter().enumerate() {
+            if i == selected_index {
+                window.mvaddstr(2 + i as i32, 0, &format!("> {:?}", n.0));
+            } else {
+                window.mvaddstr(2 + i as i32, 0, &format!("  {:?}", n.0));
+            }
+        }
+        window.refresh();
+
+        match window.getch() {
+            Some(Input::Character('q')) => {
+                return;
+            }
+            Some(Input::KeyUp) => {
+                if selected_index > 0 {
+                    selected_index -= 1;
+                }
+            }
+            Some(Input::KeyDown) => {
+                if selected_index < current_dialogue_tree.nodes.len() {
+                    selected_index += 1;
+                }
+            }
+            Some(Input::Character('\n')) => {
+                // Confirm the selection
+                let current_selection = &current_dialogue_tree.nodes[selected_index].1;
+                if let Some(current_selection) = current_selection {
+                    window.clear();
+                    window.refresh();
+                    parse_dialogue(window, current_selection);
+                    window.getch(); // Wait for user input before exiting
+                    return;
+                    selected_index = 0;
+                } else {
+                    window.nodelay(true);
+                    return;
+                }
+            }
+            _ => {}
+        }
+    }
+}
+fn get_time_as_string() -> String {
+    return "1.1.2080".to_string();
 }

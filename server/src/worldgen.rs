@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 lazy_static! {
     pub static ref WORLD_SIZE: u32 = 64;
-    pub static ref CHUNK_SIZE: u32 = 16;
+    pub static ref CHUNK_SIZE: u32 = 32;
     pub static ref TILE_SIZE: u32 = 16;
     pub static ref NOISE_SCALE: f64 = 64.0;
     pub static ref VICINITY_DIST: i32 = 2;
@@ -23,14 +23,205 @@ lazy_static! {
         "Kate".to_string(),
         "Elsa".to_string(),
         "Karen".to_string(),
-        "Jade".to_string()
+        "Jade".to_string(),
+        "Alice".to_string(),
+        "Sophia".to_string(),
+        "Emma".to_string(),
+        "Olivia".to_string(),
+        "Ava".to_string(),
+        "Isabella".to_string(),
+        "Mia".to_string(),
+        "Amelia".to_string(),
+        "Charlotte".to_string(),
+        "Harper".to_string(),
+        "Abigail".to_string(),
+        "Emily".to_string(),
+        "Ella".to_string(),
+        "Scarlett".to_string(),
+        "Grace".to_string(),
+        "Chloe".to_string(),
+        "Victoria".to_string(),
+        "Zoe".to_string(),
+        "Lily".to_string(),
+        "Hannah".to_string(),
+        "Sofia".to_string(),
+        "Madison".to_string(),
+        "Aria".to_string(),
+        "Layla".to_string(),
+        "Eleanor".to_string(),
+        "Ellie".to_string(),
+        "Stella".to_string(),
+        "Hazel".to_string(),
+        "Violet".to_string(),
+        "Aurora".to_string(),
+        "Savannah".to_string(),
+        "Bella".to_string(),
+        "Luna".to_string(),
+        "Nora".to_string(),
+        "Penelope".to_string(),
+        "Riley".to_string(),
+        "Mila".to_string(),
+        "Elizabeth".to_string(),
+        "Brooklyn".to_string(),
+        "Aubrey".to_string(),
+        "Anna".to_string(),
+        "Addison".to_string(),
+        "Willow".to_string(),
+        "Lucy".to_string(),
+        "Audrey".to_string(),
+        "Evelyn".to_string(),
+        "Camila".to_string(),
+        "Claire".to_string(),
+        "Samantha".to_string(),
+        "Elena".to_string(),
+        "Ariana".to_string(),
+        "Autumn".to_string(),
+        "Quinn".to_string(),
+        "Ivy".to_string(),
+        "Naomi".to_string(),
+        "Sarah".to_string(),
+        "Jasmine".to_string(),
+        "Delilah".to_string(),
+        "Maya".to_string(),
+        "Katherine".to_string(),
+        "Julia".to_string(),
+        "Madelyn".to_string(),
+        "Sydney".to_string(),
+        "Faith".to_string(),
+        "Lillian".to_string(),
+        "Holly".to_string(),
+        "Vivian".to_string(),
+        "Iris".to_string(),
+        "Alexa".to_string(),
+        "Clara".to_string(),
+        "Paisley".to_string(),
+        "Everly".to_string(),
+        "Fiona".to_string(),
+        "Rowan".to_string(),
+        "Tessa".to_string(),
+        "Eden".to_string(),
+        "Sienna".to_string(),
+        "Valerie".to_string(),
+        "Leah".to_string(),
+        "Kayla".to_string(),
+        "Melanie".to_string(),
+        "Brooke".to_string(),
+        "Isla".to_string(),
+        "Mckenzie".to_string(),
+        "Lila".to_string(),
+        "Reagan".to_string(),
+        "Emery".to_string(),
+        "Daisy".to_string(),
+        "Juliet".to_string(),
+        "Alina".to_string(),
+        "Genevieve".to_string(),
+        "Cora".to_string(),
+        "Adeline".to_string(),
+        "Rosalie".to_string(),
+        "Piper".to_string(),
+        "Margot".to_string()
     ];
     pub static ref HUMAN_NAMES_M: Vec<String> = vec![
         "John".to_string(),
         "Jack".to_string(),
         "Jacques".to_string(),
         "Tom".to_string(),
-        "Arnold".to_string()
+        "Arnold".to_string(),
+        "James".to_string(),
+        "Michael".to_string(),
+        "William".to_string(),
+        "David".to_string(),
+        "Joseph".to_string(),
+        "Charles".to_string(),
+        "Thomas".to_string(),
+        "Daniel".to_string(),
+        "Matthew".to_string(),
+        "Henry".to_string(),
+        "Christopher".to_string(),
+        "Andrew".to_string(),
+        "Joshua".to_string(),
+        "Nathan".to_string(),
+        "Alexander".to_string(),
+        "Ryan".to_string(),
+        "Ethan".to_string(),
+        "Samuel".to_string(),
+        "Elijah".to_string(),
+        "Benjamin".to_string(),
+        "Logan".to_string(),
+        "Noah".to_string(),
+        "Lucas".to_string(),
+        "Liam".to_string(),
+        "Oliver".to_string(),
+        "Jacob".to_string(),
+        "Caleb".to_string(),
+        "Gabriel".to_string(),
+        "Nicholas".to_string(),
+        "Zachary".to_string(),
+        "Aaron".to_string(),
+        "Tyler".to_string(),
+        "Evan".to_string(),
+        "Nathaniel".to_string(),
+        "Connor".to_string(),
+        "Mason".to_string(),
+        "Aiden".to_string(),
+        "Isaac".to_string(),
+        "Dylan".to_string(),
+        "Hunter".to_string(),
+        "Austin".to_string(),
+        "Adrian".to_string(),
+        "Dominic".to_string(),
+        "Jordan".to_string(),
+        "Parker".to_string(),
+        "Blake".to_string(),
+        "Sebastian".to_string(),
+        "Carter".to_string(),
+        "Justin".to_string(),
+        "Brandon".to_string(),
+        "Cole".to_string(),
+        "Xavier".to_string(),
+        "Miles".to_string(),
+        "Gavin".to_string(),
+        "Elliott".to_string(),
+        "Oscar".to_string(),
+        "Finn".to_string(),
+        "Tristan".to_string(),
+        "Julian".to_string(),
+        "Leo".to_string(),
+        "Harrison".to_string(),
+        "Vincent".to_string(),
+        "Maxwell".to_string(),
+        "Grant".to_string(),
+        "Hudson".to_string(),
+        "Asher".to_string(),
+        "Silas".to_string(),
+        "Wyatt".to_string(),
+        "Kai".to_string(),
+        "Lincoln".to_string(),
+        "Ryder".to_string(),
+        "Weston".to_string(),
+        "Bryce".to_string(),
+        "Emmett".to_string(),
+        "Reid".to_string(),
+        "Brody".to_string(),
+        "Zane".to_string(),
+        "Ezekiel".to_string(),
+        "Theo".to_string(),
+        "Sawyer".to_string(),
+        "Levi".to_string(),
+        "Jasper".to_string(),
+        "Colton".to_string(),
+        "Orion".to_string(),
+        "Quinn".to_string(),
+        "Dean".to_string(),
+        "Axel".to_string(),
+        "Malcolm".to_string(),
+        "Rowan".to_string(),
+        "Beckett".to_string(),
+        "Gideon".to_string(),
+        "Ronan".to_string(),
+        "Pierce".to_string(),
+        "Sterling".to_string(),
+        "Tobias".to_string()
     ];
     pub static ref GENDERS: Vec<Gender> = vec![Gender::Male, Gender::Female];
 }
@@ -177,6 +368,53 @@ impl Tasks {
         }
     }
 }
+
+#[derive(Clone, Serialize, Deserialize, Debug, Hash)]
+pub struct DialogueTree {
+    pub nodes: Vec<(String, Option<DialogueTree>)>,
+    pub giver: Option<Box<Entity>>,
+}
+
+impl DialogueTree {
+    pub fn from(nodes: Vec<(String, Option<DialogueTree>)>, giver: Option<Box<Entity>>) -> DialogueTree {
+        DialogueTree {
+            nodes: nodes,
+            giver: giver,
+        }
+    }
+    pub fn plague(giver: Option<Box<Entity>>) -> DialogueTree {
+	let g = giver.clone().unwrap();
+        DialogueTree::from(
+            vec![
+                (
+                    format!("Hello... My name is {}", g.name).to_string(),
+                    Some(DialogueTree::from(
+                        vec![("F U".to_string(), None)],
+                        giver.clone(),
+                    )),
+                ),
+                (
+                    "Cure my cows pls 2".to_string(),
+                    Some(DialogueTree::from(
+                        vec![("No u".to_string(), None)],
+                        giver.clone(),
+                    )),
+                ),
+            ],
+            giver.clone(),
+        )
+    }
+}
+#[derive(Clone, PartialEq, Serialize, Deserialize, Debug, Hash)]
+pub struct Quest {}
+#[derive(Clone, PartialEq, Serialize, Deserialize, Debug, Hash)]
+pub enum Class {
+    Detective,
+    Wanderer,
+    Businessman,
+    Chemist,
+    Engineer,
+}
 #[derive(Clone, PartialEq, Serialize, Deserialize, Debug, Hash)]
 pub enum Gender {
     Male,
@@ -224,8 +462,12 @@ pub struct Stats {
     pub hunger: u8,
     pub strength: u8,
     pub intelligence: u8,
+    pub charisma: u8,
     pub agility: u8,
+    pub senses: u8,
+    pub endurance: u8,
 }
+
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize, Hash)]
 pub enum Faction {
     Empty,
@@ -275,6 +517,9 @@ impl Stats {
             strength: 10,
             intelligence: 10,
             agility: 10,
+            charisma: 10,
+            senses: 10,
+            endurance: 10,
         }
     }
     pub fn gen() -> Stats {
@@ -285,7 +530,35 @@ impl Stats {
             strength: rng.gen_range(0..10),
             intelligence: rng.gen_range(0..10),
             agility: rng.gen_range(0..10),
+            charisma: rng.gen_range(0..10),
+            senses: rng.gen_range(0..10),
+            endurance: rng.gen_range(0..10),
         }
+    }
+    pub fn gen_from_class(class: &Class) -> Stats {
+        let mut rng = rand::thread_rng();
+        Stats {
+            health: 100,
+            hunger: 100,
+            strength: rng.gen_range(0..10),
+            intelligence: rng.gen_range(0..10),
+            agility: rng.gen_range(0..10),
+            charisma: rng.gen_range(0..10),
+            senses: rng.gen_range(0..10),
+            endurance: rng.gen_range(0..10),
+        }
+    }
+    pub fn as_string(&self) -> String {
+        format!(
+            "Strength: {}\nIntelligence: {}\nAgility: {}\nCharisma: {}\nSenses: {}\nEndurance: {}",
+            self.strength,
+            self.intelligence,
+            self.agility,
+            self.charisma,
+            self.senses,
+            self.endurance
+        )
+        .to_string()
     }
 }
 #[derive(Clone, Serialize, PartialEq, Deserialize, Debug, Hash)]
@@ -294,14 +567,26 @@ pub enum Status {
     Fighting,
     Idle,
 }
-#[derive(Clone, Serialize, Deserialize, Debug, Hash)]
+#[derive(Clone, Serialize, Deserialize, Debug, Hash, PartialEq)]
 pub enum TileType {
     Grass,
-    WoodenWall,
+    Water,
+    Sand,
+    StoneSand,
+    FarmLand,
+    WetLand,
+    Asphalt,
+    Salt,
+    Wood,
+    Concrete,
+    Granite,
 }
 #[derive(Clone, Serialize, Deserialize, Debug, Hash, PartialEq)]
 pub enum EntityType {
+    Cactus,
+    Tumbleweed,
     Human,
+    Cow,
     Cannon,
     Cauliflower,
     Lily,
@@ -397,6 +682,10 @@ pub struct Entity {
     pub tasks: Tasks,
     pub current_world: usize,
     pub linked_entity_id: u64,
+    pub class: Class,
+    pub experience: i32,
+    pub level: i32,
+    pub dialogue: Option<DialogueTree>,
 }
 impl Entity {
     pub fn new(index: usize) -> Entity {
@@ -414,10 +703,14 @@ impl Entity {
             inventory: Inventory::new(),
             index: index,
             name: "".to_string(),
+            class: Class::Wanderer,
             gender: Gender::Female,
             tasks: Tasks::new(),
             current_world: 0,
             linked_entity_id: 0,
+            level: 1,
+            experience: 0,
+	    dialogue: None,
         }
     }
     pub fn gen_player(id: usize, x: f32, y: f32, z: f32) -> Entity {
@@ -446,6 +739,41 @@ impl Entity {
             tasks: Tasks::new(),
             current_world: 0,
             linked_entity_id: 0,
+            class: Class::Wanderer,
+            level: 1,
+            experience: 0,
+	    dialogue: None,
+        }
+    }
+    pub fn gen_npc(id: usize, x: f32, y: f32, z: f32) -> Entity {
+        Entity {
+            coords: Coords_f32::from((x, y, z)),
+            ccoords: Coords_i32::from((
+                (HashableF32(x) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32))
+                    .as_i32(),
+                (HashableF32(y) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32))
+                    .as_i32(),
+                (HashableF32(z) / HashableF32(*CHUNK_SIZE as f32)).as_i32(),
+            )),
+            current_action: ActionType::Empty,
+            vel: Coords_f32::new(),
+            ang: HashableF32(0.0),
+            traj: HashableF32(0.0),
+            etype: EntityType::Human,
+            stats: Stats::new(),
+            status: Status::Idle,
+            alignment: Alignment::new(),
+            inventory: Inventory::new(),
+            index: id,
+            name: gen_human_name(Faction::Marine, &Gender::Male),
+            class: Class::Wanderer,
+            gender: Gender::Male,
+            tasks: Tasks::new(),
+            current_world: 0,
+            linked_entity_id: 0,
+            level: 1,
+            experience: 0,
+	    dialogue: None,
         }
     }
     pub fn gen_shell(id: usize, x: f32, y: f32, z: f32) -> Entity {
@@ -469,10 +797,14 @@ impl Entity {
             inventory: Inventory::new(),
             index: id,
             name: "Shell".to_string(),
+            class: Class::Wanderer,
             gender: Gender::Other,
             tasks: Tasks::new(),
             current_world: 0,
             linked_entity_id: 0,
+            level: 1,
+            experience: 0,
+	    dialogue: None,
         }
     }
     pub fn gen_explosion(id: usize, x: f32, y: f32, z: f32) -> Entity {
@@ -500,6 +832,10 @@ impl Entity {
             tasks: Tasks::new(),
             current_world: 0,
             linked_entity_id: 0,
+            class: Class::Wanderer,
+            level: 1,
+            experience: 0,
+	    dialogue: None,
         }
     }
     pub fn gen_car(id: usize, x: f32, y: f32, z: f32) -> Entity {
@@ -527,6 +863,72 @@ impl Entity {
             tasks: Tasks::new(),
             current_world: 0,
             linked_entity_id: 0,
+            class: Class::Wanderer,
+            level: 1,
+            experience: 0,
+	    dialogue: None,
+        }
+    }
+    pub fn gen_plant(id: usize, x: f32, y: f32, z: f32) -> Entity {
+        Entity {
+            coords: Coords_f32::from((x, y, z)),
+            ccoords: Coords_i32::from((
+                (HashableF32(x) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32))
+                    .as_i32(),
+                (HashableF32(y) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32))
+                    .as_i32(),
+                (HashableF32(z) / HashableF32(*CHUNK_SIZE as f32)).as_i32(),
+            )),
+            current_action: ActionType::Empty,
+            vel: Coords_f32::new(),
+            ang: HashableF32(0.0),
+            traj: HashableF32(0.0),
+            etype: EntityType::Cauliflower,
+            stats: Stats::new(),
+            status: Status::Idle,
+            alignment: Alignment::new(),
+            inventory: Inventory::new(),
+            index: id,
+            name: "".to_string(),
+            gender: Gender::Other,
+            tasks: Tasks::new(),
+            current_world: 0,
+            linked_entity_id: 0,
+            class: Class::Wanderer,
+            level: 1,
+            experience: 0,
+	    dialogue: None,
+        }
+    }
+    pub fn gen_cattle(id: usize, x: f32, y: f32, z: f32) -> Entity {
+        Entity {
+            coords: Coords_f32::from((x, y, z)),
+            ccoords: Coords_i32::from((
+                (HashableF32(x) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32))
+                    .as_i32(),
+                (HashableF32(y) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32))
+                    .as_i32(),
+                (HashableF32(z) / HashableF32(*CHUNK_SIZE as f32)).as_i32(),
+            )),
+            current_action: ActionType::Empty,
+            vel: Coords_f32::new(),
+            ang: HashableF32(0.0),
+            traj: HashableF32(0.0),
+            etype: EntityType::Cow,
+            stats: Stats::new(),
+            status: Status::Idle,
+            alignment: Alignment::new(),
+            inventory: Inventory::new(),
+            index: id,
+            name: "".to_string(),
+            gender: Gender::Other,
+            tasks: Tasks::new(),
+            current_world: 0,
+            linked_entity_id: 0,
+            class: Class::Wanderer,
+            level: 1,
+            experience: 0,
+	    dialogue: None,
         }
     }
     pub fn from(
@@ -564,6 +966,10 @@ impl Entity {
             tasks: Tasks::new(),
             current_world: current_world,
             linked_entity_id: 0,
+            class: Class::Wanderer,
+            level: 1,
+            experience: 0,
+	    dialogue: None,
         }
     }
     pub fn get_sheet(&mut self) -> String {
@@ -874,79 +1280,197 @@ impl Chunk {
                 }
                 None => (n1 + n2 + n3 + rng.gen_range(-0.5..1.0)) as f32,
             };
+            let mut ttype = TileType::Sand;
+            let mut biome = "desert";
+            if height < 0.0 {
+                ttype = TileType::Water;
+            }
             let gender = GENDERS.choose(&mut rand::thread_rng()).unwrap();
-            if height >= 0.0 && rng.gen_range(0..32) == 1 {
-                entities.push(Entity::from(
-                    c as usize,
-                    Coords_f32::from((a_x as f32, a_y as f32, height as f32)),
-                    (0.0, 0.0, 0.0),
-                    EntityType::Human,
-                    Stats::gen(),
-                    Alignment::from(faction.clone()),
-                    gen_human_name(faction.clone(), gender),
-                    gender.clone(),
-                    0,
-                ))
-            }
-            if height >= 0.0 && rng.gen_range(0..64) == 1 {
-                entities.push(Entity::from(
-                    c as usize,
-                    Coords_f32::from((a_x as f32, a_y as f32, height as f32)),
-                    (0.0, 0.0, 0.0),
-                    EntityType::Cauliflower,
-                    Stats::gen(),
-                    Alignment::from(faction.clone()),
-                    "Cauliflower".to_string(),
-                    gender.clone(),
-                    0,
-                ))
-            }
-            if height >= 0.0 && rng.gen_range(0..64) == 1 {
-                entities.push(Entity::from(
-                    c as usize,
-                    Coords_f32::from((a_x as f32, a_y as f32, height as f32)),
-                    (0.0, 0.0, 0.0),
-                    EntityType::Lily,
-                    Stats::gen(),
-                    Alignment::from(faction.clone()),
-                    "Lily".to_string(),
-                    gender.clone(),
-                    0,
-                ))
-            }
-            if height >= 0.0 && rng.gen_range(0..64) == 1 {
-                entities.push(Entity::from(
-                    c as usize,
-                    Coords_f32::from((a_x as f32, a_y as f32, height as f32)),
-                    (0.0, 0.0, 0.0),
-                    EntityType::Stone,
-                    Stats::gen(),
-                    Alignment::from(faction.clone()),
-                    "Stone".to_string(),
-                    gender.clone(),
-                    0,
-                ))
-            }
-            if height >= 0.0 && rng.gen_range(0..64) == 1 {
-                entities.push(Entity::from(
-                    c as usize,
-                    Coords_f32::from((a_x as f32, a_y as f32, height as f32)),
-                    (0.0, 0.0, 0.0),
-                    EntityType::Tulip,
-                    Stats::gen(),
-                    Alignment::from(faction.clone()),
-                    "Tulip".to_string(),
-                    gender.clone(),
-                    0,
-                ))
+            if biome == "heartland" {
+                if height >= 0.0 && rng.gen_range(0..32) == 1 {
+                    entities.push(Entity::from(
+                        c as usize,
+                        Coords_f32::from((a_x as f32, a_y as f32, height as f32)),
+                        (0.0, 0.0, 0.0),
+                        EntityType::Human,
+                        Stats::gen(),
+                        Alignment::from(faction.clone()),
+                        gen_human_name(faction.clone(), gender),
+                        gender.clone(),
+                        0,
+                    ))
+                }
+                if height >= 0.0 && rng.gen_range(0..64) == 1 {
+                    entities.push(Entity::from(
+                        c as usize,
+                        Coords_f32::from((a_x as f32, a_y as f32, height as f32)),
+                        (0.0, 0.0, 0.0),
+                        EntityType::Cauliflower,
+                        Stats::gen(),
+                        Alignment::from(faction.clone()),
+                        "Cauliflower".to_string(),
+                        gender.clone(),
+                        0,
+                    ))
+                }
+                if height >= 0.0 && rng.gen_range(0..64) == 1 {
+                    entities.push(Entity::from(
+                        c as usize,
+                        Coords_f32::from((a_x as f32, a_y as f32, height as f32)),
+                        (0.0, 0.0, 0.0),
+                        EntityType::Lily,
+                        Stats::gen(),
+                        Alignment::from(faction.clone()),
+                        "Lily".to_string(),
+                        gender.clone(),
+                        0,
+                    ))
+                }
+                if height >= 0.0 && rng.gen_range(0..64) == 1 {
+                    entities.push(Entity::from(
+                        c as usize,
+                        Coords_f32::from((a_x as f32, a_y as f32, height as f32)),
+                        (0.0, 0.0, 0.0),
+                        EntityType::Stone,
+                        Stats::gen(),
+                        Alignment::from(faction.clone()),
+                        "Stone".to_string(),
+                        gender.clone(),
+                        0,
+                    ))
+                }
+                if height >= 0.0 && rng.gen_range(0..64) == 1 {
+                    entities.push(Entity::from(
+                        c as usize,
+                        Coords_f32::from((a_x as f32, a_y as f32, height as f32)),
+                        (0.0, 0.0, 0.0),
+                        EntityType::Tulip,
+                        Stats::gen(),
+                        Alignment::from(faction.clone()),
+                        "Tulip".to_string(),
+                        gender.clone(),
+                        0,
+                    ))
+                }
+            } else if biome == "desert" {
+                if height >= 0.0 && rng.gen_range(0..64) == 1 {
+                    entities.push(Entity::from(
+                        c as usize,
+                        Coords_f32::from((a_x as f32, a_y as f32, height as f32)),
+                        (0.0, 0.0, 0.0),
+                        EntityType::Cactus,
+                        Stats::gen(),
+                        Alignment::from(faction.clone()),
+                        "".to_string(),
+                        gender.clone(),
+                        0,
+                    ))
+                }
+                if height >= 0.0 && rng.gen_range(0..64) == 1 {
+                    entities.push(Entity::from(
+                        c as usize,
+                        Coords_f32::from((a_x as f32, a_y as f32, height as f32)),
+                        (0.0, 0.0, 0.0),
+                        EntityType::Tumbleweed,
+                        Stats::gen(),
+                        Alignment::from(faction.clone()),
+                        "".to_string(),
+                        gender.clone(),
+                        0,
+                    ))
+                }
             }
             tiles.push(Tile::from(
                 Coords_i32::from((x, y, height as i32)),
                 c as usize,
                 Size::from((*TILE_SIZE as i32, *TILE_SIZE as i32, *TILE_SIZE as i32)),
-                TileType::Grass,
+                ttype,
                 None,
             ));
+        }
+
+        for c in 0..(*CHUNK_SIZE as i32 * *CHUNK_SIZE as i32) {
+            let x_c = c % (*CHUNK_SIZE as i32) + self.coords.x as i32 * *CHUNK_SIZE as i32;
+            let y_c = (c / *CHUNK_SIZE as i32) + self.coords.y as i32 * *CHUNK_SIZE as i32;
+            let a_x = x_c * *TILE_SIZE as i32;
+            let a_y = y_c * *TILE_SIZE as i32;
+            // Randomly decide whether to create a shack at this location
+            let mut discard = false;
+            if rng.gen_range(0..1000) == 1 {
+                // Ensure the shack fits within the bounds of the chunk
+                let start_x = *CHUNK_SIZE as i32 / 8;
+                let start_y = *CHUNK_SIZE as i32 / 8;
+                // Iterate through the 8x8 area to create the shack
+
+                for y in start_y..(start_y + 8) {
+                    for x in start_x..(start_x + 8) {
+                        let tile_index = (y * *CHUNK_SIZE as i32 + x) as usize;
+                        if let Some(t) = tiles.get_mut(tile_index) {
+                            if t.ttype == TileType::Concrete
+                                || t.ttype == TileType::Water
+                                || t.ttype == TileType::FarmLand
+                            {
+                                discard = true;
+                            }
+                        }
+                    }
+                }
+                if discard {
+                    continue;
+                }
+                for y in start_y..(start_y + 4) {
+                    for x in start_x..(start_x + 4) {
+                        let tile_index = (y * *CHUNK_SIZE as i32 + x) as usize;
+                        if let Some(t) = tiles.get_mut(tile_index) {
+                            if rng.gen_range(0..8) == 1 {
+                                let mut npc = Entity::gen_npc(
+                                    rng.gen_range(0..100000),
+                                    t.coords.x as f32 * *TILE_SIZE as f32,
+                                    t.coords.y as f32 * *TILE_SIZE as f32,
+                                    ((1 * *TILE_SIZE as i32) as f32),
+                                );
+				npc.dialogue = Some(DialogueTree::plague(Some(Box::new(npc.clone()))));
+                                entities.push(npc);
+                            }
+                            t.ttype = TileType::Concrete;
+                        }
+                    }
+                }
+                for y in (start_y)..(start_y + 4) {
+                    for x in (start_x + 5)..(start_x + 4 + 5) {
+                        let tile_index = (y * *CHUNK_SIZE as i32 + x) as usize;
+                        if let Some(t) = tiles.get_mut(tile_index) {
+                            if rng.gen_range(0..4) == 1 {
+                                let plant = Entity::gen_plant(
+                                    rng.gen_range(0..100000),
+                                    t.coords.x as f32 * *TILE_SIZE as f32,
+                                    t.coords.y as f32 * *TILE_SIZE as f32,
+                                    ((1 * *TILE_SIZE as i32) as f32),
+                                );
+                                entities.push(plant);
+                            }
+                            t.ttype = TileType::FarmLand;
+                        }
+                    }
+                }
+                for y in (start_y + 5)..(start_y + 4 + 5) {
+                    for x in (start_x + 5)..(start_x + 4 + 5) {
+                        let tile_index = (y * *CHUNK_SIZE as i32 + x) as usize;
+                        if let Some(t) = tiles.get_mut(tile_index) {
+                            if rng.gen_range(0..8) == 1 {
+                                let cattle = Entity::gen_cattle(
+                                    rng.gen_range(0..100000),
+                                    t.coords.x as f32 * *TILE_SIZE as f32,
+                                    t.coords.y as f32 * *TILE_SIZE as f32,
+                                    ((1 * *TILE_SIZE as i32) as f32),
+                                );
+                                entities.push(cattle);
+                            }
+                            t.ttype = TileType::Grass;
+                        }
+                    }
+                }
+            }
         }
         Chunk {
             tiles: tiles,

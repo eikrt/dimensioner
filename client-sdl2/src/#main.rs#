@@ -8,7 +8,7 @@ use dimensioner_client_sdl2::util::{
     RenderMsg,
 };
 use dimensioner_client_sdl2::worldgen::{
-    globegen, worldgen, Coords_i32, Camera, Entity, News, CHUNK_SIZE, TILE_SIZE, WORLD_SIZE,
+    globegen, worldgen, Camera, Coords_i32, Entity, News, CHUNK_SIZE, TILE_SIZE, WORLD_SIZE,
 };
 
 use rand::Rng;
@@ -58,9 +58,11 @@ fn main() {
         random_number,
         /*(*TILE_SIZE * *CHUNK_SIZE * *WORLD_SIZE / 2) as f32,
         (*TILE_SIZE * *CHUNK_SIZE * *WORLD_SIZE / 2) as f32,*/
-	0.0,0.0,
+        0.0,
+        0.0,
         0.0,
     )));
+    println!("{:?}", player.lock().unwrap().coords);
     let player_clone = Arc::clone(&player);
     let player_id = player.lock().unwrap().index;
     let mut step = 0;
@@ -98,7 +100,7 @@ fn main() {
     let s_clone = state.lock().unwrap().clone();
     let tx4_clone = tx4.clone();
     let mut c_i = 0;
-    let mut f_c_plus = Coords_i32::from((-1,-2, -4)); 
+    let mut f_c_plus = Coords_i32::from((-1, -2, -4));
     thread::spawn(move || loop {
         // Continuously read from the channel until there are no more messages
         let mut latest_message = None;
@@ -123,20 +125,20 @@ fn main() {
                 }
                 None => {}
             };
-	    if f_c_plus.x > 1 {
-		f_c_plus.x = -1;
-		f_c_plus.y += 1;
-	    }
-	    if f_c_plus.y > 1 {
-		f_c_plus.x = -1;
-		f_c_plus.y = -2;
-	    }
-	    let mut fetch_coords = e.ccoords.clone();
-	    f_c_plus.x += 1;
-	    fetch_coords.x += f_c_plus.x;
-	    fetch_coords.y += f_c_plus.y;
+            if f_c_plus.x > 1 {
+                f_c_plus.x = -1;
+                f_c_plus.y += 1;
+            }
+            if f_c_plus.y > 1 {
+                f_c_plus.x = -1;
+                f_c_plus.y = -2;
+            }
+            let mut fetch_coords = e.ccoords.clone();
+            f_c_plus.x += 1;
+            fetch_coords.x += f_c_plus.x;
+            fetch_coords.y += f_c_plus.y;
             let s = ClientData {
-		ccoords: fetch_coords, 
+                ccoords: fetch_coords,
                 entity: e,
                 action: p.action.clone(),
                 data_type: ClientDataType::Chunk,
