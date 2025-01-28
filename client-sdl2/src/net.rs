@@ -41,7 +41,7 @@ pub async fn send_client_data(client_data: ClientData) -> Result<Option<Vec<Chun
 			chunk = Some(data);
                     }
                     Err(e) => {
-                        eprintln!("Failed to parse server response with error {}", e);
+                   //     eprintln!("Failed to parse server response with error {}", e);
                     }
                 }
             }

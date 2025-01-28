@@ -370,36 +370,149 @@ impl Tasks {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, Hash)]
+pub struct DialogueNode {
+    pub content: String,
+    pub requirement_stats: Option<Stats>,
+    pub requirement_item: Option<Item>,
+}
+impl DialogueNode {
+    pub fn from(
+        content: String,
+        requirement_stats: Option<Stats>,
+        requirement_item: Option<Item>,
+    ) -> DialogueNode {
+        DialogueNode {
+            content: content,
+            requirement_stats: requirement_stats,
+            requirement_item: requirement_item,
+        }
+    }
+}
+#[derive(Clone, Serialize, Deserialize, Debug, Hash)]
 pub struct DialogueTree {
-    pub nodes: Vec<(String, Option<DialogueTree>)>,
+    pub message: DialogueNode,
+    pub answer: DialogueNode,
+    pub nodes: Vec<Option<DialogueTree>>,
     pub giver: Option<Box<Entity>>,
 }
 
 impl DialogueTree {
-    pub fn from(nodes: Vec<(String, Option<DialogueTree>)>, giver: Option<Box<Entity>>) -> DialogueTree {
+    pub fn from(
+        message: DialogueNode,
+        answer: DialogueNode,
+        nodes: Vec<Option<DialogueTree>>,
+        giver: Option<Box<Entity>>,
+    ) -> DialogueTree {
         DialogueTree {
+            message: message,
+            answer: answer,
             nodes: nodes,
             giver: giver,
         }
     }
-    pub fn plague(giver: Option<Box<Entity>>) -> DialogueTree {
-	let g = giver.clone().unwrap();
+    pub fn moo(giver: Option<Box<Entity>>) -> DialogueTree {
         DialogueTree::from(
+            DialogueNode::from(format!("Moo!",), None, None),
+            DialogueNode::from(format!("Moo moo!",), None, None),
+            vec![Some(DialogueTree::from(
+                DialogueNode::from("...".to_string(), None, None),
+                DialogueNode::from("Moo!".to_string(), None, None),
+                vec![],
+                giver.clone(),
+            ))],
+            giver.clone(),
+        )
+    }
+    pub fn investigate_plant(giver: Option<Box<Entity>>) -> DialogueTree {
+        DialogueTree::from(
+            DialogueNode::from(format!("You see a plant...",), None, None),
+            DialogueNode::from(format!("You see a plant...",), None, None),
+            vec![Some(DialogueTree::from(
+                DialogueNode::from(
+                    "Investigate plant".to_string(),
+                    Some(Stats::gen_plant()),
+                    None,
+                ),
+                DialogueNode::from(
+                    format!(
+                        "You get the following remarks: {:?}",
+                        giver.clone().unwrap().body_sheet()
+                    ),
+                    Some(Stats::gen_plant()),
+                    None,
+                ),
+                vec![],
+                giver.clone(),
+            ))],
+            giver.clone(),
+        )
+    }
+    pub fn investigate_crop(giver: Option<Box<Entity>>) -> DialogueTree {
+        DialogueTree::from(
+            DialogueNode::from(format!("You see a plant...",), None, None),
+            DialogueNode::from(format!("You see a plant...",), None, None),
+            vec![Some(DialogueTree::from(
+                DialogueNode::from(
+                    "Investigate plant".to_string(),
+                    Some(Stats::gen_crop()),
+                    None,
+                ),
+                DialogueNode::from(
+                    format!(
+                        "You get the following remarks: {:?}",
+                        giver.clone().unwrap().get_sheet()
+                    ),
+                    Some(Stats::gen_crop()),
+                    None,
+                ),
+                vec![],
+                giver.clone(),
+            ))],
+            giver.clone(),
+        )
+    }
+    pub fn plague(giver: Option<Box<Entity>>) -> DialogueTree {
+        DialogueTree::from(
+            DialogueNode::from(
+                format!(
+                    "Hello, my name is {}... What can I do for you?",
+                    giver.clone().unwrap().name
+                ),
+                None,
+                None,
+            ),
+            DialogueNode::from(
+                format!(
+                    "Hello, my name is {}... What can I do for you?",
+                    giver.clone().unwrap().name
+                ),
+                None,
+                None,
+            ),
             vec![
-                (
-                    format!("Hello... My name is {}", g.name).to_string(),
-                    Some(DialogueTree::from(
-                        vec![("F U".to_string(), None)],
+                Some(DialogueTree::from(
+                    DialogueNode::from("I'm looking for jobs.".to_string(), None, None),
+                    DialogueNode::from("I have problems with my crops... Something keeps plaguing them... Maybe you could do something about it?".to_string(), None, None),
+                    vec![Some(DialogueTree::from(
+                        DialogueNode::from("Can you tell me what's wrong with them?".to_string(), None, None),
+                        DialogueNode::from("I ain't a botanist, so I can't help you with that...".to_string(), None, None),
+                        vec![],
                         giver.clone(),
-                    )),
-                ),
-                (
-                    "Cure my cows pls 2".to_string(),
-                    Some(DialogueTree::from(
-                        vec![("No u".to_string(), None)],
-                        giver.clone(),
-                    )),
-                ),
+                    ))],
+                    giver.clone(),
+                )),
+                Some(DialogueTree::from(
+                    DialogueNode::from("What's your story?".to_string(), None, None),
+                    DialogueNode::from("I used to be a soldier... I'd rather not talk about my past...".to_string(), None, None),
+                    vec![],
+                    giver.clone(),
+                )),
+                Some(DialogueTree::from(
+                    DialogueNode::from("What's going on around here?".to_string(), None, None),
+                    DialogueNode::from("Not much I afraid...".to_string(), None, None),
+                    vec![],
+                    giver.clone(),
+                )),
             ],
             giver.clone(),
         )
@@ -410,7 +523,7 @@ pub struct Quest {}
 #[derive(Clone, PartialEq, Serialize, Deserialize, Debug, Hash)]
 pub enum Class {
     Detective,
-    Wanderer,
+    Mailcarrier,
     Businessman,
     Chemist,
     Engineer,
@@ -449,7 +562,7 @@ pub struct Inventory {
 impl Inventory {
     pub fn new() -> Inventory {
         Inventory {
-            items: vec![(Item::Coin, 1000)],
+            items: vec![(Item::Coin, 1)],
         }
     }
     pub fn get_coins(&self) -> u32 {
@@ -466,6 +579,23 @@ pub struct Stats {
     pub agility: u8,
     pub senses: u8,
     pub endurance: u8,
+    pub luck: u8,
+    pub botanist: u8,
+    pub zoology: u8,
+    pub ecology: u8,
+    pub explosives: u8,
+    pub mechanic: u8,
+    pub social: u8,
+    pub doctor: u8,
+    pub sneak: u8,
+    pub marksmanship: u8,
+    pub cook: u8,
+    pub fisher: u8,
+    pub sailor: u8,
+    pub unarmed: u8,
+    pub mining: u8,
+    pub mathematic: u8,
+    pub gambler: u8,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize, Hash)]
@@ -520,6 +650,23 @@ impl Stats {
             charisma: 10,
             senses: 10,
             endurance: 10,
+            luck: 10,
+            botanist: 10,
+            zoology: 10,
+            ecology: 10,
+            explosives: 10,
+            mechanic: 10,
+            social: 10,
+            doctor: 10,
+            sneak: 10,
+            marksmanship: 10,
+            cook: 10,
+            fisher: 10,
+            sailor: 10,
+            unarmed: 10,
+            mining: 10,
+            mathematic: 10,
+            gambler: 10,
         }
     }
     pub fn gen() -> Stats {
@@ -533,30 +680,257 @@ impl Stats {
             charisma: rng.gen_range(0..10),
             senses: rng.gen_range(0..10),
             endurance: rng.gen_range(0..10),
+            luck: rng.gen_range(0..10),
+            botanist: rng.gen_range(0..10),
+            zoology: rng.gen_range(0..10),
+            ecology: rng.gen_range(0..10),
+            explosives: rng.gen_range(0..10),
+            mechanic: rng.gen_range(0..10),
+            social: rng.gen_range(0..10),
+            doctor: rng.gen_range(0..10),
+            sneak: rng.gen_range(0..10),
+            marksmanship: rng.gen_range(0..10),
+            cook: rng.gen_range(0..10),
+            fisher: rng.gen_range(0..10),
+            sailor: rng.gen_range(0..10),
+            unarmed: rng.gen_range(0..10),
+            mining: rng.gen_range(0..10),
+            mathematic: rng.gen_range(0..10),
+            gambler: rng.gen_range(0..10),
         }
     }
     pub fn gen_from_class(class: &Class) -> Stats {
         let mut rng = rand::thread_rng();
+        match class {
+            Class::Detective => Stats {
+                health: 100,
+                hunger: 100,
+                strength: 5,
+                intelligence: 8,
+                agility: 6,
+                charisma: 4,
+                senses: 6,
+                endurance: 2,
+                luck: 5,
+                botanist: 10,
+                zoology: 5,
+                ecology: 5,
+                explosives: 10,
+                mechanic: 5,
+                social: 15,
+                doctor: 10,
+                sneak: 20,
+                marksmanship: 15,
+                cook: 5,
+                fisher: 5,
+                sailor: 5,
+                unarmed: 10,
+                mining: 5,
+                mathematic: 10,
+                gambler: 20,
+            },
+            Class::Mailcarrier => Stats {
+                health: 100,
+                hunger: 100,
+                strength: 5,
+                intelligence: 5,
+                agility: 5,
+                charisma: 5,
+                senses: 5,
+                endurance: 5,
+                luck: 5,
+                botanist: 5,
+                zoology: 5,
+                ecology: 5,
+                explosives: 10,
+                mechanic: 10,
+                social: 15,
+                doctor: 5,
+                sneak: 5,
+                marksmanship: 5,
+                cook: 15,
+                fisher: 10,
+                sailor: 10,
+                unarmed: 10,
+                mining: 10,
+                mathematic: 10,
+                gambler: 5,
+            },
+            Class::Chemist => Stats {
+                health: 100,
+                hunger: 100,
+                strength: 2,
+                intelligence: 8,
+                agility: 5,
+                charisma: 5,
+                senses: 8,
+                endurance: 3,
+                luck: 5,
+                botanist: 25,
+                zoology: 25,
+                ecology: 25,
+                explosives: 20,
+                mechanic: 5,
+                social: 5,
+                doctor: 15,
+                sneak: 5,
+                marksmanship: 5,
+                cook: 15,
+                fisher: 10,
+                sailor: 5,
+                unarmed: 5,
+                mining: 15,
+                mathematic: 10,
+                gambler: 5,
+            },
+            Class::Businessman => Stats {
+                health: 100,
+                hunger: 100,
+                strength: 3,
+                intelligence: 7,
+                agility: 2,
+                charisma: 9,
+                senses: 5,
+                endurance: 2,
+                luck: 8,
+                botanist: 5,
+                zoology: 5,
+                ecology: 5,
+                explosives: 15,
+                mechanic: 5,
+                social: 30,
+                doctor: 5,
+                sneak: 5,
+                marksmanship: 10,
+                cook: 10,
+                fisher: 15,
+                sailor: 20,
+                unarmed: 10,
+                mining: 5,
+                mathematic: 10,
+                gambler: 30,
+            },
+            Class::Engineer => Stats {
+                health: 100,
+                hunger: 100,
+                strength: 5,
+                intelligence: 5,
+                agility: 5,
+                charisma: 3,
+                senses: 5,
+                endurance: 6,
+                luck: 5,
+                botanist: 10,
+                zoology: 10,
+                ecology: 10,
+                explosives: 20,
+                mechanic: 30,
+                social: 5,
+                doctor: 10,
+                sneak: 5,
+                marksmanship: 15,
+                cook: 15,
+                fisher: 10,
+                sailor: 10,
+                unarmed: 5,
+                mining: 15,
+                mathematic: 15,
+                gambler: 10,
+            },
+        }
+    }
+    pub fn gen_plant() -> Stats {
+        let mut rng = rand::thread_rng();
         Stats {
             health: 100,
             hunger: 100,
-            strength: rng.gen_range(0..10),
-            intelligence: rng.gen_range(0..10),
-            agility: rng.gen_range(0..10),
-            charisma: rng.gen_range(0..10),
-            senses: rng.gen_range(0..10),
-            endurance: rng.gen_range(0..10),
+            strength: 5,
+            intelligence: 5,
+            agility: 5,
+            charisma: 3,
+            senses: 5,
+            endurance: 6,
+            luck: 5,
+            botanist: 5,
+            zoology: rng.gen_range(0..10),
+            ecology: rng.gen_range(0..10),
+            explosives: rng.gen_range(0..10),
+            mechanic: rng.gen_range(0..10),
+            social: rng.gen_range(0..10),
+            doctor: rng.gen_range(0..10),
+            sneak: rng.gen_range(0..10),
+            marksmanship: rng.gen_range(0..10),
+            cook: rng.gen_range(0..10),
+            fisher: rng.gen_range(0..10),
+            sailor: rng.gen_range(0..10),
+            unarmed: rng.gen_range(0..10),
+            mining: rng.gen_range(0..10),
+            mathematic: rng.gen_range(0..10),
+            gambler: rng.gen_range(0..10),
         }
     }
-    pub fn as_string(&self) -> String {
+    pub fn gen_crop() -> Stats {
+        let mut rng = rand::thread_rng();
+        Stats {
+            health: 100,
+            hunger: 100,
+            strength: 5,
+            intelligence: 5,
+            agility: 5,
+            charisma: 3,
+            senses: 5,
+            endurance: 6,
+            luck: 5,
+            botanist: 15,
+            zoology: rng.gen_range(0..10),
+            ecology: rng.gen_range(0..10),
+            explosives: rng.gen_range(0..10),
+            mechanic: rng.gen_range(0..10),
+            social: rng.gen_range(0..10),
+            doctor: rng.gen_range(0..10),
+            sneak: rng.gen_range(0..10),
+            marksmanship: rng.gen_range(0..10),
+            cook: rng.gen_range(0..10),
+            fisher: rng.gen_range(0..10),
+            sailor: rng.gen_range(0..10),
+            unarmed: rng.gen_range(0..10),
+            mining: rng.gen_range(0..10),
+            mathematic: rng.gen_range(0..10),
+            gambler: rng.gen_range(0..10),
+        }
+    }
+    pub fn stat_sheet_hard(&self) -> String {
         format!(
-            "Strength: {}\nIntelligence: {}\nAgility: {}\nCharisma: {}\nSenses: {}\nEndurance: {}",
+            "Strength: {}\nIntelligence: {}\nAgility: {}\nCharisma: {}\nSenses: {}\nEndurance: {}\nLuck: {}",
             self.strength,
             self.intelligence,
             self.agility,
             self.charisma,
             self.senses,
-            self.endurance
+            self.endurance,
+            self.luck
+        )
+        .to_string()
+    }
+    pub fn stat_sheet_soft(&self) -> String {
+        format!(
+            "Botanist: {}\nZoology: {}\nEcology: {}\nExplosives: {}\nMechanic: {}\nSocial: {}\nDoctor: {}\nSneak: {}\nMarksmanship: {}\nCook: {}\nFisher: {}\nSailor: {}\nUnarmed: {}\nMining: {}\nMathematic: {}\nGambler: {}",
+            self.botanist,
+            self.zoology,
+            self.ecology,
+            self.explosives,
+            self.mechanic,
+            self.social,
+            self.doctor,
+	    self.sneak,
+	    self.marksmanship,
+	    self.cook,
+	    self.fisher,
+	    self.sailor,
+	    self.unarmed,
+	    self.mining,
+	    self.mathematic,
+	    self.gambler,
         )
         .to_string()
     }
@@ -664,6 +1038,42 @@ impl Coords_i32 {
     }
 }
 #[derive(Clone, Serialize, Deserialize, Debug, Hash)]
+pub enum DiseaseType {
+    Healthy,
+    FusariumWilt,
+    VerticilliumWilt,
+}
+#[derive(Clone, Serialize, Deserialize, Debug, Hash)]
+pub enum BodyPartType {
+    Head,
+    LeftArm,
+    RightArm,
+    Torso,
+    LeftLeg,
+    RightLeg,
+    Stem,
+    Areoles,
+    Flower,
+}
+#[derive(Clone, Serialize, Deserialize, Debug, Hash)]
+pub struct BodyPart {
+    bptype: BodyPartType,
+    dttype: DiseaseType,
+    health: i32,
+}
+impl BodyPart {
+    pub fn from(bptype: BodyPartType, dttype: DiseaseType, health: i32) -> BodyPart {
+        BodyPart {
+            bptype: bptype,
+            dttype: dttype,
+            health: health,
+        }
+    }
+    pub fn get_sheet(&self) -> Vec<String>{
+	vec![format!("Type: {:?}", self.bptype), format!("Disease: {:?}", self.dttype), format!("Health: {}", self.health)]
+    }
+}
+#[derive(Clone, Serialize, Deserialize, Debug, Hash)]
 pub struct Entity {
     pub coords: Coords_f32,
     pub ccoords: Coords_i32,
@@ -686,6 +1096,7 @@ pub struct Entity {
     pub experience: i32,
     pub level: i32,
     pub dialogue: Option<DialogueTree>,
+    pub parts: Vec<BodyPart>,
 }
 impl Entity {
     pub fn new(index: usize) -> Entity {
@@ -703,15 +1114,23 @@ impl Entity {
             inventory: Inventory::new(),
             index: index,
             name: "".to_string(),
-            class: Class::Wanderer,
+            class: Class::Mailcarrier,
             gender: Gender::Female,
             tasks: Tasks::new(),
             current_world: 0,
             linked_entity_id: 0,
             level: 1,
             experience: 0,
-	    dialogue: None,
+            dialogue: None,
+            parts: vec![],
         }
+    }
+    pub fn body_sheet(&self) -> Vec<String> {
+	let mut vec: Vec<String> = vec![];
+	for s in &self.parts {
+	    vec.extend(s.get_sheet());
+	}
+	vec
     }
     pub fn gen_player(id: usize, x: f32, y: f32, z: f32) -> Entity {
         Entity {
@@ -739,10 +1158,11 @@ impl Entity {
             tasks: Tasks::new(),
             current_world: 0,
             linked_entity_id: 0,
-            class: Class::Wanderer,
+            class: Class::Mailcarrier,
             level: 1,
             experience: 0,
-	    dialogue: None,
+            dialogue: None,
+            parts: vec![],
         }
     }
     pub fn gen_npc(id: usize, x: f32, y: f32, z: f32) -> Entity {
@@ -766,14 +1186,15 @@ impl Entity {
             inventory: Inventory::new(),
             index: id,
             name: gen_human_name(Faction::Marine, &Gender::Male),
-            class: Class::Wanderer,
+            class: Class::Mailcarrier,
             gender: Gender::Male,
             tasks: Tasks::new(),
             current_world: 0,
             linked_entity_id: 0,
             level: 1,
             experience: 0,
-	    dialogue: None,
+            parts: vec![],
+            dialogue: None,
         }
     }
     pub fn gen_shell(id: usize, x: f32, y: f32, z: f32) -> Entity {
@@ -797,14 +1218,15 @@ impl Entity {
             inventory: Inventory::new(),
             index: id,
             name: "Shell".to_string(),
-            class: Class::Wanderer,
+            class: Class::Mailcarrier,
             gender: Gender::Other,
             tasks: Tasks::new(),
             current_world: 0,
             linked_entity_id: 0,
             level: 1,
             experience: 0,
-	    dialogue: None,
+            dialogue: None,
+            parts: vec![],
         }
     }
     pub fn gen_explosion(id: usize, x: f32, y: f32, z: f32) -> Entity {
@@ -832,10 +1254,11 @@ impl Entity {
             tasks: Tasks::new(),
             current_world: 0,
             linked_entity_id: 0,
-            class: Class::Wanderer,
+            class: Class::Mailcarrier,
             level: 1,
             experience: 0,
-	    dialogue: None,
+            dialogue: None,
+            parts: vec![],
         }
     }
     pub fn gen_car(id: usize, x: f32, y: f32, z: f32) -> Entity {
@@ -863,13 +1286,14 @@ impl Entity {
             tasks: Tasks::new(),
             current_world: 0,
             linked_entity_id: 0,
-            class: Class::Wanderer,
+            class: Class::Mailcarrier,
             level: 1,
             experience: 0,
-	    dialogue: None,
+            dialogue: None,
+            parts: vec![],
         }
     }
-    pub fn gen_plant(id: usize, x: f32, y: f32, z: f32) -> Entity {
+    pub fn gen_crop(id: usize, x: f32, y: f32, z: f32) -> Entity {
         Entity {
             coords: Coords_f32::from((x, y, z)),
             ccoords: Coords_i32::from((
@@ -894,10 +1318,51 @@ impl Entity {
             tasks: Tasks::new(),
             current_world: 0,
             linked_entity_id: 0,
-            class: Class::Wanderer,
+            class: Class::Mailcarrier,
             level: 1,
             experience: 0,
-	    dialogue: None,
+            dialogue: None,
+            parts: vec![BodyPart::from(
+                BodyPartType::Stem,
+                DiseaseType::Healthy,
+                100,
+            )],
+        }
+    }
+    pub fn gen_sick_plant(id: usize, x: f32, y: f32, z: f32) -> Entity {
+        Entity {
+            coords: Coords_f32::from((x, y, z)),
+            ccoords: Coords_i32::from((
+                (HashableF32(x) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32))
+                    .as_i32(),
+                (HashableF32(y) / HashableF32(*TILE_SIZE as f32) / HashableF32(*CHUNK_SIZE as f32))
+                    .as_i32(),
+                (HashableF32(z) / HashableF32(*CHUNK_SIZE as f32)).as_i32(),
+            )),
+            current_action: ActionType::Empty,
+            vel: Coords_f32::new(),
+            ang: HashableF32(0.0),
+            traj: HashableF32(0.0),
+            etype: EntityType::Cauliflower,
+            stats: Stats::new(),
+            status: Status::Idle,
+            alignment: Alignment::new(),
+            inventory: Inventory::new(),
+            index: id,
+            name: "".to_string(),
+            gender: Gender::Other,
+            tasks: Tasks::new(),
+            current_world: 0,
+            linked_entity_id: 0,
+            class: Class::Mailcarrier,
+            level: 1,
+            experience: 0,
+            dialogue: None,
+            parts: vec![BodyPart::from(
+                BodyPartType::Stem,
+                DiseaseType::VerticilliumWilt,
+                10,
+            )],
         }
     }
     pub fn gen_cattle(id: usize, x: f32, y: f32, z: f32) -> Entity {
@@ -925,10 +1390,11 @@ impl Entity {
             tasks: Tasks::new(),
             current_world: 0,
             linked_entity_id: 0,
-            class: Class::Wanderer,
+            class: Class::Mailcarrier,
             level: 1,
             experience: 0,
-	    dialogue: None,
+            dialogue: None,
+            parts: vec![],
         }
     }
     pub fn from(
@@ -966,14 +1432,15 @@ impl Entity {
             tasks: Tasks::new(),
             current_world: current_world,
             linked_entity_id: 0,
-            class: Class::Wanderer,
+            class: Class::Mailcarrier,
             level: 1,
             experience: 0,
-	    dialogue: None,
+            dialogue: None,
+            parts: vec![],
         }
     }
-    pub fn get_sheet(&mut self) -> String {
-        return format!("{}\n{:?}", self.name, self.etype).to_string();
+    pub fn get_sheet(&mut self) -> Vec<String> {
+	vec![format!("{}", self.name), format!("{:?}", self.etype)]
     }
     pub fn fire(&mut self) {
         self.tasks.fire = (1, true);
@@ -1071,8 +1538,8 @@ impl Tile {
             designed: None,
         }
     }
-    pub fn get_sheet(&mut self) -> String {
-        return format!("{:?}", self.ttype).to_string();
+    pub fn get_sheet(&mut self) -> Vec<String> {
+        return vec![format!("{:?}", self.ttype).to_string()];
     }
     pub fn as_bytes(&self) -> Result<Vec<u8>, bincode::Error> {
         bincode::serialize(self)
@@ -1354,7 +1821,7 @@ impl Chunk {
                 }
             } else if biome == "desert" {
                 if height >= 0.0 && rng.gen_range(0..64) == 1 {
-                    entities.push(Entity::from(
+                    let mut plant = Entity::from(
                         c as usize,
                         Coords_f32::from((a_x as f32, a_y as f32, height as f32)),
                         (0.0, 0.0, 0.0),
@@ -1364,10 +1831,19 @@ impl Chunk {
                         "".to_string(),
                         gender.clone(),
                         0,
-                    ))
+                    );
+
+                    plant.parts = vec![
+                        BodyPart::from(BodyPartType::Stem, DiseaseType::Healthy, 100),
+                        BodyPart::from(BodyPartType::Areoles, DiseaseType::Healthy, 100),
+                    ];
+                    plant.dialogue = Some(DialogueTree::investigate_plant(Some(Box::new(
+                        plant.clone(),
+                    ))));
+                    entities.push(plant)
                 }
                 if height >= 0.0 && rng.gen_range(0..64) == 1 {
-                    entities.push(Entity::from(
+                    let mut plant = Entity::from(
                         c as usize,
                         Coords_f32::from((a_x as f32, a_y as f32, height as f32)),
                         (0.0, 0.0, 0.0),
@@ -1377,7 +1853,16 @@ impl Chunk {
                         "".to_string(),
                         gender.clone(),
                         0,
-                    ))
+                    );
+
+                    plant.parts = vec![
+                        BodyPart::from(BodyPartType::Stem, DiseaseType::Healthy, 100),
+                        BodyPart::from(BodyPartType::Flower, DiseaseType::Healthy, 100),
+                    ];
+                    plant.dialogue = Some(DialogueTree::investigate_plant(Some(Box::new(
+                        plant.clone(),
+                    ))));
+                    entities.push(plant)
                 }
             }
             tiles.push(Tile::from(
@@ -1429,7 +1914,8 @@ impl Chunk {
                                     t.coords.y as f32 * *TILE_SIZE as f32,
                                     ((1 * *TILE_SIZE as i32) as f32),
                                 );
-				npc.dialogue = Some(DialogueTree::plague(Some(Box::new(npc.clone()))));
+                                npc.dialogue =
+                                    Some(DialogueTree::plague(Some(Box::new(npc.clone()))));
                                 entities.push(npc);
                             }
                             t.ttype = TileType::Concrete;
@@ -1441,12 +1927,15 @@ impl Chunk {
                         let tile_index = (y * *CHUNK_SIZE as i32 + x) as usize;
                         if let Some(t) = tiles.get_mut(tile_index) {
                             if rng.gen_range(0..4) == 1 {
-                                let plant = Entity::gen_plant(
+                                let mut plant = Entity::gen_sick_plant(
                                     rng.gen_range(0..100000),
                                     t.coords.x as f32 * *TILE_SIZE as f32,
                                     t.coords.y as f32 * *TILE_SIZE as f32,
                                     ((1 * *TILE_SIZE as i32) as f32),
                                 );
+                                plant.dialogue = Some(DialogueTree::investigate_plant(Some(
+                                    Box::new(plant.clone()),
+                                )));
                                 entities.push(plant);
                             }
                             t.ttype = TileType::FarmLand;
@@ -1458,12 +1947,15 @@ impl Chunk {
                         let tile_index = (y * *CHUNK_SIZE as i32 + x) as usize;
                         if let Some(t) = tiles.get_mut(tile_index) {
                             if rng.gen_range(0..8) == 1 {
-                                let cattle = Entity::gen_cattle(
+                                let mut cattle = Entity::gen_cattle(
                                     rng.gen_range(0..100000),
                                     t.coords.x as f32 * *TILE_SIZE as f32,
                                     t.coords.y as f32 * *TILE_SIZE as f32,
                                     ((1 * *TILE_SIZE as i32) as f32),
                                 );
+
+                                cattle.dialogue =
+                                    Some(DialogueTree::moo(Some(Box::new(cattle.clone()))));
                                 entities.push(cattle);
                             }
                             t.ttype = TileType::Grass;
@@ -1490,7 +1982,7 @@ impl Chunk {
         let mut coin_count = 0;
         self.entities
             .iter()
-            .map(|e| coin_count += e.inventory.get_coins());
+            .for_each(|e| coin_count += e.inventory.get_coins());
 
         if coin_count < 10 {
             news.push("absolute poorness in region x\n".to_string())

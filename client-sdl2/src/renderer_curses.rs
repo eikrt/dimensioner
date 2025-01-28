@@ -47,12 +47,8 @@ pub fn render_server(
 ) {
     let mut vicinity_box = VicinityBox::new();
     let mut camera = Camera::new();
-    camera.coords.x = HashableF32(40.0 * *TILE_SIZE as f32);
-    camera.coords.y = HashableF32(12.0 * *TILE_SIZE as f32);
-    /*camera.coords.x =
-        HashableF32((*TILE_SIZE * *CHUNK_SIZE * *WORLD_SIZE / 2 - *WINDOW_WIDTH as u32 / 2 * *TILE_SIZE as u32) as f32);
-    camera.coords.y =
-        HashableF32((*TILE_SIZE * *CHUNK_SIZE * *WORLD_SIZE / 2 - *WINDOW_HEIGHT as u32 / 2 * *TILE_SIZE as u32) as f32);*/
+    camera.coords.x = HashableF32(-40.0 * *TILE_SIZE as f32);
+    camera.coords.y = HashableF32(-12.0 * *TILE_SIZE as f32);
     let mut last_frame_time = Instant::now();
     let mut r: Option<Vec<RenderMsg>> = None;
     let mut current_chunks: Vec<Chunk> = vec![];
@@ -80,8 +76,8 @@ pub fn render_server(
     let mut highlighted_tile: Option<Tile> = None;
     let mut character_menu_show = false;
     let mut dialogue = false;
-    let mut current_dialogue_tree: Option<DialogueTree> = None; 
-    let mut character_menu_nodes = vec!["Stats", "Done"];
+    let mut current_dialogue_tree: Option<DialogueTree> = None;
+    let mut character_menu_nodes = vec!["Stats", "Skills", "Inventory", "Done"];
     loop {
         window.mvaddstr(0, 0, "Wanderers of Planet E");
         window.refresh();
@@ -101,7 +97,7 @@ pub fn render_server(
 
     let classes = vec![
         Class::Detective,
-        Class::Wanderer,
+        Class::Mailcarrier,
         Class::Chemist,
         Class::Businessman,
         Class::Engineer,
@@ -110,6 +106,8 @@ pub fn render_server(
     let mut name = "".to_string();
     let mut chosen_class = Class::Detective;
     let mut selected_index = 0;
+    let mut last_message: String = "You have embarked.".to_string();
+
     loop {
         window.clear();
         window.mvaddstr(0, 0, "Character Creation");
@@ -183,8 +181,13 @@ pub fn render_server(
                 }
                 window.mvaddstr(0, 0, &name);
                 window.mvaddstr(1, 0, format!("{:?}", &chosen_class));
-                window.mvaddstr(2, 0, stats.as_string());
+                window.mvaddstr(2, 0, stats.stat_sheet_hard());
                 window.refresh();
+                window.getch(); // Wait for user input before exiting
+                window.clear();
+                window.mvaddstr(0, 0, &name);
+                window.mvaddstr(1, 0, format!("{:?}", &chosen_class));
+                window.mvaddstr(2, 0, stats.stat_sheet_soft());
                 window.getch(); // Wait for user input before exiting
                 selected_index = 0;
                 break;
@@ -273,17 +276,17 @@ pub fn render_server(
                     }
                 }
                 window.mvaddstr(
-                    t.coords.y + camera.coords.y.as_i32() / *TILE_SIZE as i32,
-                    (t.coords.x + camera.coords.x.as_i32() / *TILE_SIZE as i32),
+                    t.coords.y - camera.coords.y.as_i32() / *TILE_SIZE as i32,
+                    (t.coords.x - camera.coords.x.as_i32() / *TILE_SIZE as i32),
                     s,
                 );
 
                 if t.coords.x
                     == vicinity_box.coords.x.as_i32() / *TILE_SIZE as i32
-                        - camera.coords.x.as_i32() / *TILE_SIZE as i32
+                        + camera.coords.x.as_i32() / *TILE_SIZE as i32
                     && t.coords.y
                         == vicinity_box.coords.y.as_i32() / *TILE_SIZE as i32
-                            - camera.coords.y.as_i32() / *TILE_SIZE as i32
+                            + camera.coords.y.as_i32() / *TILE_SIZE as i32
                 {
                     highlighted_tile = Some(t.clone());
                 }
@@ -297,14 +300,17 @@ pub fn render_server(
                 window.attron(COLOR_PAIR(3));
                 window.mvaddstr(
                     e.coords.y.as_i32() / *TILE_SIZE as i32
-                        + camera.coords.y.as_i32() / *TILE_SIZE as i32,
+                        - camera.coords.y.as_i32() / *TILE_SIZE as i32,
                     e.coords.x.as_i32() / *TILE_SIZE as i32
-                        + camera.coords.x.as_i32() / *TILE_SIZE as i32,
+                        - camera.coords.x.as_i32() / *TILE_SIZE as i32,
                     format!("{:?}", e.etype)[0..1].to_string(),
                 );
-                if e.coords.x.as_i32() == vicinity_box.coords.x.as_i32() - camera.coords.x.as_i32()
-                    && e.coords.y.as_i32()
-                        == vicinity_box.coords.y.as_i32() - camera.coords.y.as_i32()
+                if e.coords.x.as_i32() / *TILE_SIZE as i32
+                    == vicinity_box.coords.x.as_i32() / *TILE_SIZE as i32
+                        + camera.coords.x.as_i32() / *TILE_SIZE as i32
+                    && e.coords.y.as_i32() / *TILE_SIZE as i32
+                        == vicinity_box.coords.y.as_i32() / *TILE_SIZE as i32
+                            + camera.coords.y.as_i32() / *TILE_SIZE as i32
                 {
                     highlighted_entity = Some(e.clone());
                 }
@@ -320,20 +326,16 @@ pub fn render_server(
                 }
             }
         }
-        /*for i in 0..(*HUD_HEIGHT) {
-            for j in (*WINDOW_WIDTH - *HUD_WIDTH)..(*HUD_WIDTH) {
-                window.attron(COLOR_PAIR(5));
-                window.mvaddch(i, j, ' ');
-            }
-        }*/
 
         if let Some(ref mut highlighted_entity) = highlighted_entity {
             window.attron(COLOR_PAIR(5));
-            window.mvaddstr(0, 0, &highlighted_entity.get_sheet());
+            for (i, s) in highlighted_entity.get_sheet().into_iter().enumerate() {
+                window.mvaddstr(i as i32, 0, format!("{}", s));
+            }
         }
         if let Some(ref mut highlighted_tile) = highlighted_tile {
             window.attron(COLOR_PAIR(5));
-            window.mvaddstr(4, 0, format!("{}", &highlighted_tile.get_sheet()));
+            window.mvaddstr(4, 0, format!("{}", &highlighted_tile.get_sheet()[0]));
         }
         for i in (0)..(*HUD_WIDTH) {
             window.mvaddstr(*WINDOW_HEIGHT / 2, i, "–");
@@ -358,6 +360,8 @@ pub fn render_server(
                 format!("Level: {:?}", player.level),
             );
         }
+
+        window.mvaddstr(*WINDOW_HEIGHT / 2 - 1, 0, &last_message);
         window.mvaddstr(*WINDOW_HEIGHT - 4, 0, get_time_as_string());
         if let Ok(rm) = rx_client.recv() {
             window.refresh();
@@ -365,9 +369,9 @@ pub fn render_server(
             window.attron(COLOR_PAIR(3));
             window.mvaddstr(
                 m.coords.y.as_i32() / *TILE_SIZE as i32
-                    + camera.coords.y.as_i32() / *TILE_SIZE as i32,
+                    - camera.coords.y.as_i32() / *TILE_SIZE as i32,
                 m.coords.x.as_i32() / *TILE_SIZE as i32
-                    + camera.coords.x.as_i32() / *TILE_SIZE as i32,
+                    - camera.coords.x.as_i32() / *TILE_SIZE as i32,
                 "@",
             );
             window.mvaddstr(
@@ -380,7 +384,18 @@ pub fn render_server(
                 player.stats = stats.clone();
                 player.class = chosen_class.clone();
                 player.name = name.clone();
+                camera.coords.x = HashableF32(lerp(
+                    camera.coords.x.as_f32() - *WINDOW_WIDTH as f32,
+                    player.coords.x.as_f32(),
+                    0.1,
+                ));
+                camera.coords.y = HashableF32(lerp(
+                    camera.coords.y.as_f32() - *WINDOW_HEIGHT as f32,
+                    player.coords.y.as_f32(),
+                    0.1,
+                ));
             }
+
             match window.getch() {
                 Some(Input::Character('q')) => {
                     // Quit the application
@@ -390,16 +405,12 @@ pub fn render_server(
                 Some(Input::Character(c)) => {
                     if c == 'w' {
                         m.coords.y -= HashableF32(*TILE_SIZE as f32);
-                        camera.coords.y += HashableF32(*TILE_SIZE as f32);
                     } else if c == 'a' {
                         m.coords.x -= HashableF32(*TILE_SIZE as f32);
-                        camera.coords.x += HashableF32(*TILE_SIZE as f32);
                     } else if c == 's' {
                         m.coords.y += HashableF32(*TILE_SIZE as f32);
-                        camera.coords.y -= HashableF32(*TILE_SIZE as f32);
                     } else if c == 'd' {
                         m.coords.x += HashableF32(*TILE_SIZE as f32);
-                        camera.coords.x -= HashableF32(*TILE_SIZE as f32);
                     } else if c == 'h' {
                         vicinity_box.coords.x -= HashableF32(*TILE_SIZE as f32);
                     } else if c == 'j' {
@@ -412,75 +423,85 @@ pub fn render_server(
                         character_menu_show = true;
                     } else if c == 'e' {
                         if let Some(ref mut highlighted_entity) = highlighted_entity {
-                            if highlighted_entity.etype == EntityType::Human {
-				current_dialogue_tree = highlighted_entity.dialogue.clone();
-                                dialogue = true;
-                            }
+                            current_dialogue_tree = highlighted_entity.dialogue.clone();
+                            dialogue = true;
                         }
                     }
                 }
                 Some(input) => {}
                 None => (),
             }
-            if dialogue {
-                window.nodelay(false);
-		if let Some(ref current_dialogue_tree) = current_dialogue_tree {
-                    parse_dialogue(&window, &current_dialogue_tree);
-		}
-                dialogue = false;
-            }
-            if character_menu_show {
-                window.nodelay(false);
-                loop {
-                    window.clear();
-                    window.mvaddstr(0, 0, "Character Menu");
-
-                    for (i, n) in character_menu_nodes.iter().enumerate() {
-                        if i == selected_index {
-                            window.mvaddstr(2 + i as i32, 0, &format!("> {}", n));
-                        } else {
-                            window.mvaddstr(2 + i as i32, 0, &format!("  {}", n));
-                        }
+            if let Some(ref player) = player {
+                if dialogue {
+                    window.nodelay(false);
+                    if let Some(ref current_dialogue_tree) = current_dialogue_tree {
+                        parse_dialogue(&window, player, &mut stats, &current_dialogue_tree);
                     }
-                    // Display classes and highlight the selected one
-                    // Instruction to set the character name
-                    window.refresh();
+                    dialogue = false;
+                }
+                if character_menu_show {
+                    window.nodelay(false);
+                    loop {
+                        window.clear();
+                        window.mvaddstr(0, 0, "Character Menu");
 
-                    match window.getch() {
-                        Some(Input::Character('q')) => {
-                            break;
-                        }
-                        Some(Input::KeyUp) => {
-                            if selected_index > 0 {
-                                selected_index -= 1;
-                            }
-                        }
-                        Some(Input::KeyDown) => {
-                            if selected_index < classes.len() - 1 {
-                                selected_index += 1;
-                            }
-                        }
-                        Some(Input::Character('\n')) => {
-                            // Confirm the selection
-                            if selected_index == 0 {
-                                window.clear();
-                                stats = Stats::gen_from_class(&chosen_class);
-                                if name.is_empty() {
-                                    name = "John Doe".to_string(); // Default name if none provided
-                                }
-                                window.mvaddstr(0, 0, &name);
-                                window.mvaddstr(1, 0, format!("{:?}", &chosen_class));
-                                window.mvaddstr(2, 0, stats.as_string());
-                                window.refresh();
-                                window.getch(); // Wait for user input before exiting
-                                selected_index = 0;
+                        for (i, n) in character_menu_nodes.iter().enumerate() {
+                            if i == selected_index {
+                                window.mvaddstr(2 + i as i32, 0, &format!("> {}", n));
                             } else {
-                                character_menu_show = false;
-                                window.nodelay(true);
+                                window.mvaddstr(2 + i as i32, 0, &format!("  {}", n));
+                            }
+                        }
+                        window.refresh();
+                        match window.getch() {
+                            Some(Input::Character('q')) => {
                                 break;
                             }
+                            Some(Input::KeyUp) => {
+                                if selected_index > 0 {
+                                    selected_index -= 1;
+                                }
+                            }
+                            Some(Input::KeyDown) => {
+                                if selected_index < classes.len() - 1 {
+                                    selected_index += 1;
+                                }
+                            }
+                            Some(Input::Character('\n')) => {
+                                // Confirm the selection
+                                if selected_index == 0 {
+                                    window.clear();
+                                    stats = player.stats.clone();
+                                    window.mvaddstr(0, 0, &name);
+                                    window.mvaddstr(1, 0, format!("{:?}", &chosen_class));
+                                    window.mvaddstr(2, 0, stats.stat_sheet_hard());
+                                    window.refresh();
+                                    window.getch(); // Wait for user input before exiting
+                                    selected_index = 0;
+                                } else if selected_index == 1 {
+                                    window.clear();
+                                    stats = player.stats.clone();
+                                    window.mvaddstr(0, 0, &name);
+                                    window.mvaddstr(1, 0, format!("{:?}", &chosen_class));
+                                    window.mvaddstr(2, 0, stats.stat_sheet_soft());
+                                    window.refresh();
+                                    window.getch(); // Wait for user input before exiting
+                                    selected_index = 0;
+                                } else if selected_index == 2 {
+                                    window.clear();
+                                    window.mvaddstr(0, 0, "Inventory");
+                                    window.mvaddstr(1, 0, format!("{:?}", player.inventory));
+                                    window.refresh();
+                                    window.getch(); // Wait for user input before exiting
+                                    selected_index = 0;
+                                } else {
+                                    character_menu_show = false;
+                                    window.nodelay(true);
+                                    break;
+                                }
+                            }
+                            _ => {}
                         }
-                        _ => {}
                     }
                 }
             }
@@ -491,20 +512,35 @@ pub fn render_server(
         }
 
         let _ = sx.send(MainMsg::from(camera.clone(), player.clone(), true));
+
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
 }
 
-fn parse_dialogue(window: &Window, current_dialogue_tree: &DialogueTree) {
+fn parse_dialogue(window: &Window, player: &Entity, stats: &mut Stats, current_dialogue_tree: &DialogueTree) {
     let mut selected_index = 0;
     loop {
         window.clear();
         window.mvaddstr(0, 0, "Dialogue Menu");
+        let req_stats = &current_dialogue_tree.answer.requirement_stats;
+        if let Some(req_stats) = req_stats {
+            if player.stats.botanist < req_stats.botanist {
+                window.mvaddstr(1 as i32, 0, "Your skills are lacking for this task...");
+                window.getch();
+                return;
+            }
+	    else {
+		stats.botanist += 1;
+	    }
+        }
+        window.mvaddstr(1, 0, format!("{:?}", current_dialogue_tree.answer.content));
         for (i, n) in current_dialogue_tree.nodes.iter().enumerate() {
-            if i == selected_index {
-                window.mvaddstr(2 + i as i32, 0, &format!("> {:?}", n.0));
-            } else {
-                window.mvaddstr(2 + i as i32, 0, &format!("  {:?}", n.0));
+            if let Some(n) = n {
+                if i == selected_index {
+                    window.mvaddstr(4 + i as i32, 0, &format!("> {:?}", n.message.content));
+                } else {
+                    window.mvaddstr(4 + i as i32, 0, &format!("  {:?}", n.message.content));
+                }
             }
         }
         window.refresh();
@@ -525,14 +561,18 @@ fn parse_dialogue(window: &Window, current_dialogue_tree: &DialogueTree) {
             }
             Some(Input::Character('\n')) => {
                 // Confirm the selection
-                let current_selection = &current_dialogue_tree.nodes[selected_index].1;
-                if let Some(current_selection) = current_selection {
-                    window.clear();
-                    window.refresh();
-                    parse_dialogue(window, current_selection);
-                    window.getch(); // Wait for user input before exiting
-                    return;
-                    selected_index = 0;
+                if current_dialogue_tree.nodes.len() > 0 {
+                    let current_selection = &current_dialogue_tree.nodes[selected_index];
+                    if let Some(current_selection) = current_selection {
+                        window.clear();
+                        window.refresh();
+                        parse_dialogue(window, player, stats, current_selection);
+                        window.getch(); // Wait for user input before exiting
+                        selected_index = 0;
+                        return;
+                    } else {
+                        selected_index = 0;
+                    }
                 } else {
                     window.nodelay(true);
                     return;
