@@ -15,10 +15,112 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 lazy_static! {
     pub static ref WORLD_SIZE: u32 = 64;
-    pub static ref CHUNK_SIZE: u32 = 32;
+    pub static ref CHUNK_SIZE: u32 = 16;
     pub static ref TILE_SIZE: u32 = 16;
     pub static ref NOISE_SCALE: f64 = 64.0;
     pub static ref VICINITY_DIST: i32 = 2;
+    pub static ref SETTLEMENT_NAMES: Vec<String> = vec![
+        "Valenor".to_string(),
+        "Starfall Haven".to_string(),
+        "Lithora".to_string(),
+        "Xenith Prime".to_string(),
+        "Vortara".to_string(),
+        "Eldrath".to_string(),
+        "Zerithar".to_string(),
+        "Nova's Edge".to_string(),
+        "Solstice Spire".to_string(),
+        "Astrion Keep".to_string(),
+        "Nexara".to_string(),
+        "Halcyon Reach".to_string(),
+        "Crystalis".to_string(),
+        "Tharacyn".to_string(),
+        "Sablehold".to_string(),
+        "Eryndor".to_string(),
+        "Shadewood".to_string(),
+        "Altharion".to_string(),
+        "Thalindra".to_string(),
+        "Zephora".to_string(),
+        "Veyrith".to_string(),
+        "Ascendant Keep".to_string(),
+        "Omnor's Cradle".to_string(),
+        "Ashraven".to_string(),
+        "Sylph's End".to_string(),
+        "Lynthar".to_string(),
+        "Skyforge".to_string(),
+        "Nyx Hollow".to_string(),
+        "Arkenstone".to_string(),
+        "Kethyr".to_string(),
+        "Pyrius".to_string(),
+        "Celestara".to_string(),
+        "Rhyvann".to_string(),
+        "Ironfall".to_string(),
+        "Veldren Peak".to_string(),
+        "Eclipse Spire".to_string(),
+        "Harrowport".to_string(),
+        "Vexarion".to_string(),
+        "Talaris".to_string(),
+        "Fenix Gate".to_string(),
+        "Velis Prime".to_string(),
+        "Arctis Forge".to_string(),
+        "Nythoria".to_string(),
+        "Obsidian Gate".to_string(),
+        "Drakholm".to_string(),
+        "Karaseth".to_string(),
+        "Zephonix".to_string(),
+        "Trilan's Rest".to_string(),
+        "Galadar".to_string(),
+        "Iridian Cross".to_string(),
+        "Cindera's Keep".to_string(),
+        "Lytheria".to_string(),
+        "Selenaris".to_string(),
+        "Fen'kora".to_string(),
+        "Valoria".to_string(),
+        "Valtor’s Throne".to_string(),
+        "Rivenhold".to_string(),
+        "Narethis".to_string(),
+        "Obsidian Rift".to_string(),
+        "Wyrmspire".to_string(),
+        "Astralon".to_string(),
+        "Jotun's Crest".to_string(),
+        "Elvesaen".to_string(),
+        "Atheris Keep".to_string(),
+        "Xyloth".to_string(),
+        "Emberwatch".to_string(),
+        "Starforge".to_string(),
+        "Shimmerhold".to_string(),
+        "Vor'kalis".to_string(),
+        "Thraedan".to_string(),
+        "Nexus Citadel".to_string(),
+        "Haldrix".to_string(),
+        "Sylphara".to_string(),
+        "Omorath".to_string(),
+        "Ashhaven".to_string(),
+        "Tir'lan".to_string(),
+        "Arcanum's End".to_string(),
+        "Zephyr Vale".to_string(),
+        "Dreadspire".to_string(),
+        "Eldrath Keep".to_string(),
+        "Varkyn".to_string(),
+        "Kaeloria".to_string(),
+        "Draegor's Fall".to_string(),
+        "Sythra".to_string(),
+        "Lyriath's Reach".to_string(),
+        "Ferrosk".to_string(),
+        "Eryndal".to_string(),
+        "Wyverndale".to_string(),
+        "Norrath Reach".to_string(),
+        "Tiras' Rest".to_string(),
+        "Saphira Falls".to_string(),
+        "Greystorm Hold".to_string(),
+        "Zorilith".to_string(),
+        "Valkara Reach".to_string(),
+        "Lumerith".to_string(),
+        "Pyrithor".to_string(),
+        "Ashglade".to_string(),
+        "Zaldris".to_string(),
+        "Valvoris".to_string(),
+        "Umbraholt".to_string()
+    ];
     pub static ref HUMAN_NAMES_F: Vec<String> = vec![
         "Kate".to_string(),
         "Elsa".to_string(),
@@ -420,6 +522,46 @@ impl DialogueTree {
                 vec![],
                 giver.clone(),
             ))],
+            giver.clone(),
+        )
+    }
+    pub fn investigate_cat(giver: Option<Box<Entity>>) -> DialogueTree {
+        DialogueTree::from(
+            DialogueNode::from(format!("You see a cat...",), None, None),
+            DialogueNode::from(format!("You see a cat...",), None, None),
+            vec![
+                Some(DialogueTree::from(
+                    DialogueNode::from(
+                        "Investigate cat".to_string(),
+                        Some(Stats::gen_plant()),
+                        None,
+                    ),
+                    DialogueNode::from(
+                        format!(
+                            "You get the following remarks: {:?}",
+                            giver.clone().unwrap().body_sheet()
+                        ),
+                        Some(Stats::gen_plant()),
+                        None,
+                    ),
+                    vec![],
+                    giver.clone(),
+                )),
+                Some(DialogueTree::from(
+                    DialogueNode::from(
+                        "Try to tame the cat".to_string(),
+                        Some(Stats::gen_cat()),
+                        None,
+                    ),
+                    DialogueNode::from(
+                        "You tame the cat. Meow Meow!".to_string(),
+                        Some(Stats::gen_plant()),
+                        None,
+                    ),
+                    vec![],
+                    giver.clone(),
+                )),
+            ],
             giver.clone(),
         )
     }
@@ -869,6 +1011,36 @@ impl Stats {
             gambler: rng.gen_range(0..10),
         }
     }
+    pub fn gen_cat() -> Stats {
+        let mut rng = rand::thread_rng();
+        Stats {
+            health: 100,
+            hunger: 100,
+            strength: 5,
+            intelligence: 5,
+            agility: 5,
+            charisma: 3,
+            senses: 5,
+            endurance: 6,
+            luck: 5,
+            botanist: 5,
+            zoology: 10,
+            ecology: rng.gen_range(0..10),
+            explosives: rng.gen_range(0..10),
+            mechanic: rng.gen_range(0..10),
+            social: rng.gen_range(0..10),
+            doctor: rng.gen_range(0..10),
+            sneak: rng.gen_range(0..10),
+            marksmanship: rng.gen_range(0..10),
+            cook: rng.gen_range(0..10),
+            fisher: rng.gen_range(0..10),
+            sailor: rng.gen_range(0..10),
+            unarmed: rng.gen_range(0..10),
+            mining: rng.gen_range(0..10),
+            mathematic: rng.gen_range(0..10),
+            gambler: rng.gen_range(0..10),
+        }
+    }
     pub fn gen_crop() -> Stats {
         let mut rng = rand::thread_rng();
         Stats {
@@ -971,6 +1143,7 @@ pub enum EntityType {
     Explosion,
     Landmine,
     Car,
+    Cat,
 }
 #[derive(Clone, Serialize, Deserialize, Debug, Hash, PartialEq)]
 pub struct Coords_i32 {
@@ -1069,8 +1242,12 @@ impl BodyPart {
             health: health,
         }
     }
-    pub fn get_sheet(&self) -> Vec<String>{
-	vec![format!("Type: {:?}", self.bptype), format!("Disease: {:?}", self.dttype), format!("Health: {}", self.health)]
+    pub fn get_sheet(&self) -> Vec<String> {
+        vec![
+            format!("Type: {:?}", self.bptype),
+            format!("Disease: {:?}", self.dttype),
+            format!("Health: {}", self.health),
+        ]
     }
 }
 #[derive(Clone, Serialize, Deserialize, Debug, Hash)]
@@ -1126,11 +1303,11 @@ impl Entity {
         }
     }
     pub fn body_sheet(&self) -> Vec<String> {
-	let mut vec: Vec<String> = vec![];
-	for s in &self.parts {
-	    vec.extend(s.get_sheet());
-	}
-	vec
+        let mut vec: Vec<String> = vec![];
+        for s in &self.parts {
+            vec.extend(s.get_sheet());
+        }
+        vec
     }
     pub fn gen_player(id: usize, x: f32, y: f32, z: f32) -> Entity {
         Entity {
@@ -1440,7 +1617,7 @@ impl Entity {
         }
     }
     pub fn get_sheet(&mut self) -> Vec<String> {
-	vec![format!("{}", self.name), format!("{:?}", self.etype)]
+        vec![format!("{}", self.name), format!("{:?}", self.etype)]
     }
     pub fn fire(&mut self) {
         self.tasks.fire = (1, true);
@@ -1512,6 +1689,36 @@ impl Entity {
     }
 }
 #[derive(Clone, Serialize, Deserialize, Debug, Hash)]
+pub struct Settlement {
+    pub ccoords: Coords_i32,
+    pub coords: Coords_f32,
+    pub name: String,
+    pub faction: Faction,
+}
+impl Settlement {
+    pub fn from(
+        ccoords: Coords_i32,
+        coords: Coords_f32,
+        name: String,
+        faction: Faction,
+    ) -> Settlement {
+        Settlement {
+            ccoords: ccoords,
+            coords: coords,
+            name: name,
+            faction: faction,
+        }
+    }
+    pub fn new() -> Settlement {
+        Settlement {
+            ccoords: Coords_i32::from((0, 0, 0)),
+            coords: Coords_f32::from((0.0, 0.0, 0.0)),
+            name: "Placeholder settlement name".to_string(),
+            faction: Faction::Marine,
+        }
+    }
+}
+#[derive(Clone, Serialize, Deserialize, Debug, Hash)]
 pub struct Tile {
     pub coords: Coords_i32,
     pub index: usize,
@@ -1549,6 +1756,7 @@ impl Tile {
 pub struct Chunk {
     pub tiles: Vec<Tile>,
     pub entities: Vec<Entity>,
+    pub settlement: Option<Settlement>,
     pub coords: Coords_i32,
     pub index: usize,
     pub hash: u64,
@@ -1569,6 +1777,7 @@ impl Chunk {
             tiles,
             entities,
             coords,
+	    settlement: None,
             index,
             hash,
             timezone: timezone,
@@ -1585,6 +1794,7 @@ impl Chunk {
         Chunk {
             tiles: vec![],
             entities: vec![],
+	    settlement: None,
             coords: Coords_i32::new(),
             index: 0,
             hash: 0,
@@ -1864,6 +2074,26 @@ impl Chunk {
                     ))));
                     entities.push(plant)
                 }
+                if height >= 0.0 && rng.gen_range(0..64) == 1 {
+                    let mut cat = Entity::from(
+                        c as usize,
+                        Coords_f32::from((a_x as f32, a_y as f32, height as f32)),
+                        (0.0, 0.0, 0.0),
+                        EntityType::Cat,
+                        Stats::gen(),
+                        Alignment::from(faction.clone()),
+                        "".to_string(),
+                        gender.clone(),
+                        0,
+                    );
+
+                    cat.parts = vec![
+                        BodyPart::from(BodyPartType::Stem, DiseaseType::Healthy, 100),
+                        BodyPart::from(BodyPartType::Flower, DiseaseType::Healthy, 100),
+                    ];
+                    cat.dialogue = Some(DialogueTree::investigate_cat(Some(Box::new(cat.clone()))));
+                    entities.push(cat)
+                }
             }
             tiles.push(Tile::from(
                 Coords_i32::from((x, y, height as i32)),
@@ -1967,6 +2197,7 @@ impl Chunk {
         Chunk {
             tiles: tiles,
             entities: entities,
+	    settlement: None,
             coords: self.coords.clone(),
             index: self.index,
             hash: 0,
@@ -2005,11 +2236,12 @@ impl News {
 #[derive(Clone, Serialize, Deserialize, Debug, Hash)]
 pub struct World {
     pub chunks: Vec<Chunk>,
+    pub settlements: Option<Vec<Settlement>>,
     pub time: u64,
 }
 impl World {
-    pub fn from(chunks: Vec<Chunk>, time: u64) -> World {
-        World { chunks, time }
+    pub fn from(chunks: Vec<Chunk>, settlements: Option<Vec<Settlement>>, time: u64) -> World {
+        World { chunks, settlements, time }
     }
     pub fn fetch_chunk_mut(&mut self, index: usize) -> &mut Chunk {
         &mut self.chunks[index]
@@ -2093,7 +2325,47 @@ pub fn worldgen(seed: u32) -> World {
         ));
     }
     chunks.par_iter_mut().for_each(|c| *c = c.gen(seed, None));
-    let world = World::from(chunks, 0);
+    let settlements: Vec<Settlement> = chunks.par_iter_mut().map(|c| {
+        let mut settlement = Settlement::new();
+        let mut faction_counts: HashMap<Faction, usize> = HashMap::new();
+        for e in &c.entities {
+            *faction_counts
+                .entry(e.alignment.faction.clone())
+                .or_insert(0) += 1;
+	    
+        }
+
+	println!("{:?}", faction_counts.clone());
+        let largest_faction = faction_counts
+            .into_iter()
+            .max_by(|a, b| a.1.cmp(&b.1)) // Compare the count of inhabitants
+            .map(|(faction, _)| faction) // Get the faction with the highest count
+            .unwrap_or(Faction::Empty); // Fallback in case there are no factions
+	
+        let mut settlement_name = SETTLEMENT_NAMES
+            .choose(&mut rand::thread_rng())
+            .unwrap()
+            .to_string();
+	if largest_faction == Faction::Empty {
+	    settlement_name = "Wastes".to_string(); 
+	}
+        settlement = Settlement::from(
+            c.coords.clone(),
+            Coords_f32::from((0.0, 0.0, 0.0)),
+            settlement_name,
+            largest_faction.clone(), // Use the largest faction
+        );
+
+        settlement
+    }).collect();
+    for c in &mut chunks {
+	for settlement in &settlements {
+	    if c.coords == settlement.ccoords {
+		c.settlement = Some(settlement.clone());
+	    }
+	}
+    }
+    let world = World::from(chunks, Some(settlements), 0);
     world
 }
 pub fn globegen() -> World {
@@ -2125,6 +2397,6 @@ pub fn globegen() -> World {
     chunks
         .par_iter_mut()
         .for_each(|c| *c = c.gen(0, Some(&img)));
-    let world = World::from(chunks, 0);
+    let world = World::from(chunks, None, 0);
     world
 }

@@ -1,1 +1,1 @@
-/home/eino/repo/dimensioner/client-sdl2/src/util.rs
+/home/eino/repo/dimensioner/client/src/util.rs
